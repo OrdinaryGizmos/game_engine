@@ -1,6 +1,6 @@
 use super::{
     olc::Rcode,
-    util::{Vi2d, Vf2d, HWButton},
+    util::{HWButton, Vf2d, Vi2d},
 };
 use std::collections::hash_map::HashMap;
 #[cfg(target_arch = "wasm32")]
@@ -8,7 +8,14 @@ use winit::platform::web::WindowBuilderExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-use winit::{event::{Event, WindowEvent, ElementState, MouseScrollDelta}, event_loop::EventLoop, platform::windows::WindowBuilderExtWindows, window::{Window,WindowBuilder}};
+#[cfg(not(target_arch="wasm32"))]
+use winit::platform::windows::WindowBuilderExtWindows;
+
+use winit::{
+    event::{ElementState, Event, MouseScrollDelta, WindowEvent},
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
 pub const MOUSE_BUTTONS: u8 = 5;
 
@@ -98,9 +105,9 @@ pub struct PlatformData {
 
 impl PlatformData {
     pub const fn create() -> Self {
-        #[cfg(target_arch="wasm32")]
-        let y_up_direction = -1.0;
-        #[cfg(not(target_arch="wasm32"))]
+        #[cfg(target_arch = "wasm32")]
+        let y_up_direction = 1.0;
+        #[cfg(not(target_arch = "wasm32"))]
         let y_up_direction = 1.0;
         Self {
             mouse_focus: false,
@@ -224,7 +231,7 @@ impl Platform for PlatformWindows {
                 width: window_size.x as f64,
                 height: window_size.y as f64,
             }))
-            .with_drag_and_drop(false)
+            //.with_drag_and_drop(false)
             /*.with_fullscreen(
             Some(winit::window::Fullscreen::Borderless(
             event_loop.available_monitors().next().expect("Wrong monitor"))))*/

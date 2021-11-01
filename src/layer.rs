@@ -1,12 +1,13 @@
 use super::{
     decal::DecalInstance,
     game_object::GameObject,
-    geometry::Vertex,
+    geometry::{Vertex, PBRTexture},
+    olc::OlcData,
     pixel::Pixel,
     renderer::Renderer,
     sprite::{Sprite, SpriteMode},
+    texture::Texture,
     util::Vf2d,
-    olc::OlcData,
 };
 
 use bitflags::bitflags;
@@ -104,7 +105,9 @@ bitflags! {
 pub struct DrawData {
     pub mask: Mask,
     pub index_buffer: wgpu::Buffer,
+    pub index_buffer_length: usize,
     pub vertex_buffer: wgpu::Buffer,
+    pub vertex_buffer_length: usize,
     pub texture_groups: Vec<(std::ops::Range<u32>, Option<wgpu::BindGroup>)>,
 }
 
@@ -223,37 +226,64 @@ impl DrawData {
      */
     pub fn initialize(
         mut self,
+        textures: &Vec<Texture>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         game_objects: &[&GameObject],
     ) -> Self {
-        self.update(device, queue, game_objects);
+        self.update(textures, device, queue, game_objects);
         self
     }
 
-    pub fn update(&mut self,
+    pub fn clear(&mut self,
+        queue: &wgpu::Queue){
+        let vertices: Vec<Vertex> = vec![Vertex::default(); self.vertex_buffer_length];
+        let indices: Vec<u32> = vec![0; self.index_buffer_length];
+        //Fill index_buffer
+        queue.write_buffer(
+            &self.index_buffer,
+            0,
+            bytemuck::cast_slice(indices.as_slice()),
+        );
+        //Fill vertex::buffer
+        queue.write_buffer(
+            &self.vertex_buffer,
+            0,
+            bytemuck::cast_slice(vertices.as_slice()),
+        );
+        self.texture_groups.clear();
+    }
+
+    pub fn update(
+        &mut self,
+        textures: &Vec<Texture>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        game_objects: &[&GameObject],){
+        game_objects: &[&GameObject],
+    ) {
         let mut vertices: Vec<Vertex> = vec![];
         let mut indices: Vec<u32> = vec![];
         let (mut index_count, mut vertex_count) = (0, 0);
         for (_i, go) in game_objects.iter().enumerate() {
             let (verts, inds, vc, _) = go.get_vertices_and_indices(vertex_count, index_count);
             for mesh in &go.meshes {
-                let tex = mesh.get_texture().as_ref().and_then(|tex| {
-                    tex.texture_bundle.as_ref().map(|bundle| {
-                        device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            entries: &[wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(&bundle.view),
-                            }],
-                            label: None,
-                            layout: &device
-                                .create_bind_group_layout(&DrawData::default_bind_group_layout()),
+                let tex = if let Some(PBRTexture::Color(id)) =
+                    mesh.textures.iter().filter(|&t| match *t { PBRTexture::Color(_) => true, _ => false }).next(){
+
+                    if let Some(tex) = textures.get(*id) {
+                        tex.texture_bundle.as_ref().map(|bundle| {
+                            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                entries: &[wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(&bundle.view),
+                                }],
+                                label: None,
+                                layout: &device
+                                    .create_bind_group_layout(&DrawData::default_bind_group_layout()),
+                            })
                         })
-                    })
-                });
+                    } else { None }
+                } else { None };
 
                 let mesh_index_count = mesh.buffer_indices.len() as u32;
                 let i_range = index_count..index_count + mesh_index_count;
@@ -266,7 +296,8 @@ impl DrawData {
             indices.extend(inds);
             vertex_count = vc;
         }
-        println!("Verts: {}, Indices: {}", vertices.len(), indices.len());
+        self.index_buffer_length = indices.len();
+        self.vertex_buffer_length = vertices.len();
         //Fill index_buffer
         queue.write_buffer(
             &self.index_buffer,
@@ -286,7 +317,7 @@ impl DrawData {
         wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStage::FRAGMENT,
+                visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     view_dimension: wgpu::TextureViewDimension::D2,
@@ -302,7 +333,9 @@ impl DrawData {
         Self {
             mask,
             index_buffer: renderer.new_index_buffer(),
+            index_buffer_length: 0,
             vertex_buffer: renderer.new_vertex_buffer(),
+            vertex_buffer_length: 0,
             texture_groups: vec![],
         }
     }
@@ -314,11 +347,12 @@ impl PipelineData {
             .device
             .create_shader_module(&wgpu::ShaderModuleDescriptor {
                 label: Some("default_shader"),
-                flags: wgpu::ShaderFlags::all(),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/default_postprocess.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("shaders/default_postprocess.wgsl").into(),
+                ),
             });
         let sc_desc = &[wgpu::ColorTargetState {
-            format: renderer.sc_desc.format,
+            format: renderer.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
                     operation: wgpu::BlendOperation::Add,
@@ -331,7 +365,7 @@ impl PipelineData {
                     dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                 },
             }),
-            write_mask: wgpu::ColorWrite::ALL,
+            write_mask: wgpu::ColorWrites::ALL,
         }];
         let bind_group_layouts = vec![
             renderer
@@ -341,7 +375,7 @@ impl PipelineData {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
@@ -351,7 +385,7 @@ impl PipelineData {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
-                            visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                             ty: wgpu::BindingType::Sampler {
                                 comparison: false,
                                 filtering: false,
@@ -446,7 +480,7 @@ impl PipelineData {
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
-                usage: wgpu::BufferUsage::UNIFORM,
+                usage: wgpu::BufferUsages::UNIFORM,
                 contents: bytemuck::cast_slice(&[0; 1]),
             });
         Self {
@@ -489,7 +523,7 @@ impl PipelineData {
                     push_constant_ranges: &[],
                 });
         let color_target = &[wgpu::ColorTargetState {
-            format: renderer.sc_desc.format,
+            format: renderer.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
                     operation: wgpu::BlendOperation::Add,
@@ -502,7 +536,7 @@ impl PipelineData {
                     dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                 },
             }),
-            write_mask: wgpu::ColorWrite::ALL,
+            write_mask: wgpu::ColorWrites::ALL,
         }];
         let depth_stencil = if use_depth {
             Some(wgpu::DepthStencilState {
@@ -554,8 +588,6 @@ pub fn default_layer_func<D: OlcData>(
     encoder: &mut wgpu::CommandEncoder,
 ) {
     if let LayerInfo::Render(render_info) = &layer.layer_info {
-        let _frame = renderer.get_frame().expect("Can't get Frame");
-
         {
             if let Some(pipeline_data) = &render_info.pipeline_bundle {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

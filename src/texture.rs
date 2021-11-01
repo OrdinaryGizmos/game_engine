@@ -29,15 +29,46 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::COPY_DST
-                | wgpu::TextureUsage::RENDER_ATTACHMENT
-                | wgpu::TextureUsage::COPY_SRC,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
             label: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             data: Sprite::new(width, height),
+            texture_bundle: Some(TextureBundle {
+                texture,
+                view,
+                format,
+            }),
+        }
+    }
+    pub fn new_from_sprite(
+        device: &wgpu::Device,
+        data: Sprite,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: data.width,
+                height: data.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
+            label: None,
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Self {
+            data,
             texture_bundle: Some(TextureBundle {
                 texture,
                 view,
@@ -61,10 +92,10 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsage::SAMPLED
-                | wgpu::TextureUsage::COPY_DST
-                | wgpu::TextureUsage::RENDER_ATTACHMENT
-                | wgpu::TextureUsage::COPY_SRC,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
             label: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -87,6 +118,7 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 texture: &self.texture_bundle.as_ref().unwrap().texture,
+                aspect: wgpu::TextureAspect::All,
             },
             self.data.get_data(),
             wgpu::ImageDataLayout {
@@ -109,6 +141,7 @@ impl Texture {
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 texture: &self.texture_bundle.as_ref().unwrap().texture,
+                aspect: wgpu::TextureAspect::All,
             },
             spr.get_data(),
             wgpu::ImageDataLayout {

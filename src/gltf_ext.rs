@@ -1,14 +1,16 @@
+use crate::texture::Texture;
+
 use super::{game_object::GameObject, geometry::*, math_3d::*, transform::*};
 
 
-pub fn get_game_objects(data: &[u8]) -> Vec<GameObject> {
+pub fn get_game_objects(data: &[u8]) -> (Vec<GameObject>, Vec<gltf::image::Data>)  {
     let (document, buffers, images) = gltf::import_slice(data).unwrap();
     let mut skip_nodes: Vec<usize> = document.nodes().map(get_children_id).flatten().collect();
-    document
-        .nodes()
-        .filter(|node| !skip_nodes.contains(&node.index()))
-        .map(|node| process_node(node, &buffers, &images))
-        .collect()
+    (document.nodes()
+     .filter(|node| !skip_nodes.contains(&node.index()))
+     .map(|node| process_node(node, &buffers, &images))
+     .collect(),
+     images)
 }
 
 pub fn get_game_objects_from_file(data: &str) -> Vec<GameObject> {
@@ -62,6 +64,7 @@ pub fn extract_node<'a>(
             scale,
         } => {
             //Transform3::default()
+            println!("{:?}", rotation);
             Transform3 {
                 rot: Rotor3::from_quat(rotation),
                 scale: scale.into(),
@@ -89,42 +92,31 @@ pub fn extract_node<'a>(
                     }
                     Some((spr, image_index))
                 };
-            if let Some(emissive) = material
-                .emissive_texture()
-                .and_then(|e| get_texture(e.texture()))
+            let mut textures: Vec<PBRTexture> = vec![];
+
+            if let Some(tex) = material.emissive_texture()
             {
-                println!("emissive: {:?}", emissive.0.width);
-            }
-            if let Some(normal_map) = material
-                .normal_texture()
-                .and_then(|n| get_texture(n.texture()))
-            {
-                println!("normal: {:?}", normal_map.0.width);
+                println!("FOUND EMISSIVE");
+                textures.insert(textures.len(), PBRTexture::Emissive(tex.texture().source().index()))
             }
 
-            let tex_i = material
-                .pbr_metallic_roughness()
-                .metallic_roughness_texture()
-                .and_then(|i| get_texture(i.texture()))
-                .map(|(tex, index)| (crate::texture::Texture::uninitialized(tex), index));
-            let (texture, index) = if let Some((tex, i)) = tex_i {
-                println!("roughness: {:?}", tex.data.width);
-                (Some(tex), i)
-            } else {
-                (None, 0)
-            };
+            if let Some(tex) = material.normal_texture()
+            {
+                println!("FOUND NORMAL");
+                textures.insert(textures.len(), PBRTexture::Normal(tex.texture().source().index()))
+            }
 
-            let tex_i = material
-                .pbr_metallic_roughness()
-                .base_color_texture()
-                .and_then(|i| get_texture(i.texture()))
-                .map(|(tex, index)| (crate::texture::Texture::uninitialized(tex), index));
-            let (texture, index) = if let Some((tex, i)) = tex_i {
-                println!("color: {:?}", tex.data.width);
-                (Some(tex), i)
-            } else {
-                (None, 0)
-            };
+            if let Some(tex) = material.pbr_metallic_roughness().metallic_roughness_texture()
+            {
+                println!("FOUND ROUGHNESS");
+                textures.insert(textures.len(), PBRTexture::Roughness(tex.texture().source().index()))
+            }
+
+            if let Some(tex) = material.pbr_metallic_roughness().base_color_texture()
+            {
+                println!("FOUND COLOR");
+                textures.insert(textures.len(), PBRTexture::Color(tex.texture().source().index()))
+            }
 
             if let Some(vert_iter) = reader.read_positions() {
                 let vertices: Vec<[f32; 3]> = vert_iter.into_iter().collect();
@@ -167,11 +159,11 @@ pub fn extract_node<'a>(
                             //   * transform.rot ) + transform.pos)
                             // .into())
                             //.collect(),
-                            ind.iter().rev().copied().collect(),
+                            ind.iter().copied().collect(),
                         ),
                         buffer_indices: vec![],
                         buffer_offset: 0,
-                        texture,
+                        textures,
                     };
                     new_mesh.calculate_normals(NormalMode::Shaded);
                     out_meshes.insert(out_meshes.len(), new_mesh);
@@ -204,7 +196,7 @@ pub fn extract_node<'a>(
                         ),
                         buffer_indices: vec![],
                         buffer_offset: 0,
-                        texture,
+                        textures,
                     };
                     new_mesh.calculate_normals(NormalMode::Flat);
                     out_meshes.insert(out_meshes.len(), new_mesh);
@@ -214,4 +206,36 @@ pub fn extract_node<'a>(
     }
 
     (node, transform, out_meshes)
+}
+
+
+pub fn texture_to_sprite (texture: gltf::texture::Texture, images: &[gltf::image::Data]) -> Option<(crate::sprite::Sprite, usize)> {
+        let image_index = texture.source().index();
+        let image = &images[image_index];
+        let mut spr = crate::sprite::Sprite::new(image.width, image.height);
+        match image.format {
+            gltf::image::Format::R8 => spr.set_data(&image.pixels, 1),
+            gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),
+            gltf::image::Format::R8G8B8 => spr.set_data(&image.pixels, 3),
+            gltf::image::Format::R8G8B8A8 => spr.set_data(&image.pixels, 4),
+            gltf::image::Format::B8G8R8 => spr.set_data(&image.pixels, 3),
+            gltf::image::Format::B8G8R8A8 => spr.set_data(&image.pixels, 4),
+            _ => {}
+        }
+        Some((spr, image_index))
+}
+
+pub fn image_to_sprite(image: &gltf::image::Data) -> crate::sprite::Sprite{
+    let mut spr = crate::sprite::Sprite::new(image.width, image.height);
+    println!("{:?}", image.format);
+    match image.format {
+        gltf::image::Format::R8 => spr.set_data(&image.pixels, 1),
+        gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),
+        gltf::image::Format::R8G8B8 => spr.set_data(&image.pixels, 3),
+        gltf::image::Format::R8G8B8A8 => spr.set_data(&image.pixels, 4),
+        gltf::image::Format::B8G8R8 => spr.set_data(&image.pixels, 3),
+        gltf::image::Format::B8G8R8A8 => spr.set_data(&image.pixels, 4),
+        _ => {}
+    };
+    spr
 }

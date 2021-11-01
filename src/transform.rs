@@ -24,10 +24,10 @@ impl Transform3 {
         let v1 = (Vector3::new(0.0, 1.0, 0.0) * self.rot) * self.scale.y;
         let v2 = (Vector3::new(0.0, 0.0, 1.0) * self.rot) * self.scale.z;
         cgmath::Matrix4::new(
-            v0.x,v1.x,-v2.x,0.0,
+            -v0.x,v1.x,-v2.x,0.0,
             v0.y,v1.y,-v2.y,0.0,
-            v0.z,v1.z,-v2.z,0.0,
-            -self.pos.dot(v0),-self.pos.dot(v1),self.pos.dot(v2),1.0,
+            -v0.z,v1.z,-v2.z,0.0,
+            self.pos.dot(v0),-self.pos.dot(v1),self.pos.dot(v2),1.0,
         )
     }
 

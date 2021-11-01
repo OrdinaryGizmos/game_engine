@@ -1,5 +1,3 @@
- 
- 
 struct VertexOutput{
     [[builtin(position)]] pos: vec4<f32>;
     [[location(0)]] tex_coord: vec2<f32>;
@@ -15,7 +13,7 @@ struct Uniforms{
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 
 
 [[group(0), binding(1)]]

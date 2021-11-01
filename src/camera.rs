@@ -44,6 +44,7 @@ impl Camera {
             ..Default::default()
         }
     }
+
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let proj = cgmath::perspective(
             cgmath::Deg(self.fov),
@@ -51,8 +52,15 @@ impl Camera {
             self.clip_near,
             self.clip_far,
         );
+        // let view = cgmath::Matrix4::look_to_rh(
+        //     self.transform.pos.into(),
+        //     self.transform.rot.forward().normal().into(),
+        //     cgmath::Vector3::unit_y() );
+        // println!("PROJ: {:?}", view);
+        // println!("MINE: {:?}", self.transform.to_transform_matrix());
         OPENGL_TO_WGPU_MATRIX * proj * self.transform.to_transform_matrix()
     }
+
     pub fn build_reverse_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         use cgmath::SquareMatrix;
         let proj = cgmath::perspective(

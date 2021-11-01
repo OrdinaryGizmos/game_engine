@@ -1,11 +1,11 @@
-use crate::audio::AudioSystem;
+//use crate::audio::AudioSystem;
 
 use super::{
     olc::Olc,
     olc::OlcData,
     camera::Camera,
-    decal::{Decal},
-    engine::{OLCEngine},
+    decal::Decal,
+    engine::OLCEngine,
     layer::{LayerDesc, LayerType, LayerFunc, LayerInfo},
     platform::{PLATFORM_DATA, Platform, PlatformWindows},
     renderer::Renderer,
@@ -54,7 +54,7 @@ pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
         PLATFORM_DATA.title = app_name.into();
         PLATFORM_DATA.pixel_size = Some(Vi2d::new(pixel_width as i32, pixel_height as i32));
     };
-    start_game(
+    let game_start = start_game(
         olc,
         game_data,
         app_name,
@@ -66,9 +66,16 @@ pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
         vsync,
     );
 
+
+    #[cfg(not(target_arch = "wasm32"))]
+    futures::executor::block_on(game_start);
+
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(game_start);
+
 }
 
-fn finish_setup<D: 'static + OlcData>(
+async fn finish_setup<D: 'static + OlcData>(
     game_data: D,
     app_name: &'static str,
     screen_width: u32,
@@ -80,10 +87,24 @@ fn finish_setup<D: 'static + OlcData>(
     window: winit::window::Window,
 ) -> OLCEngine<D>{
 
-    let renderer: Renderer = futures::executor::block_on(Renderer::new(&window));
 
-    let audio_system =
-            AudioSystem::create_system();
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::WindowExtWebSys;
+
+        let canvas = window.canvas();
+
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let body = document.body().unwrap();
+        body.append_child(&canvas)
+            .expect("Append canvas to HTML body");
+    }
+
+    let renderer: Renderer = Renderer::new(&window).await;
+
+    // let audio_system =
+    //         AudioSystem::create_system();
 
     let mut engine = OLCEngine {
         app_name: String::from(""),
@@ -106,7 +127,7 @@ fn finish_setup<D: 'static + OlcData>(
         font_decal: Decal::empty(),
         depth_buffer: vec![],
         camera: Camera::default(),
-        audio_system,
+        //audio_system,
         window,
     };
     engine.init(
@@ -121,7 +142,7 @@ fn finish_setup<D: 'static + OlcData>(
     engine
 }
 
-fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
+async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
     olc: T,
     game_data: D,
     app_name: &'static str,
@@ -138,7 +159,8 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
         unsafe { PLATFORM_DATA.full_screen },
     );
 
-    let mut engine = finish_setup(
+
+    let mut engine: OLCEngine<D> = finish_setup(
         game_data,
         app_name,
         screen_width,
@@ -148,7 +170,8 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
         full_screen,
         vsync,
         window,
-    );
+    ).await;
+
     unsafe {
         if PLATFORM_DATA.full_screen {
             let fwin = PLATFORM_DATA.window_size.unwrap_or_default().to_vf2d();
@@ -182,9 +205,9 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
     let mut game_timer = js_sys::Date::now() as f64;
 
     //game_engine.construct_font_sheet();
-
-    olc.on_engine_start(&mut engine);
+    let mut engine_owned = olc.on_engine_start(engine).await;
     event_loop.run(move |top_event, window_target, control_flow| {
+        let mut engine = &mut engine_owned;
         *control_flow = ControlFlow::Poll;
 
         match top_event {
@@ -199,10 +222,12 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
                         PlatformWindows::handle_window_event(&engine.window, &top_event);
                     }
                 }
-            }
-            Event::RedrawEventsCleared => {
+            },
+            Event::MainEventsCleared => {
+                // RedrawRequested will only trigger once, unless we manually
+                // request it.
                 engine.window.request_redraw();
-            }
+            },
             Event::RedrawRequested(_) => {
                 engine.renderer.active_decals = vec![];
                 for layer in engine.layers.iter_mut() {
@@ -222,49 +247,48 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
                     }
                 }
 
-                let mut encoder = engine.renderer.device.create_command_encoder(
-                    &wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    },
-                );
-                {
-                    let clear_frames_render_pass =
-                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                            label: Some("Render Pass"),
-                            color_attachments: &[
-                        //     wgpu::RenderPassColorAttachment{
-                        //     view: &engine.renderer.frame_texture.view,
-                        //     resolve_target: None,
-                        //     ops: wgpu::Operations{
-                        //         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        //         store: true,
-                        //     }
-                        // },wgpu::RenderPassColorAttachment{
-                        //     view: &engine.renderer.frame_texture_backbuffer.view,
-                        //     resolve_target: None,
-                        //     ops: wgpu::Operations{
-                        //         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        //         store: true,
-                        //     }
-                        // },
-                        ],
-                            depth_stencil_attachment: Some(
-                                wgpu::RenderPassDepthStencilAttachment {
-                                    view: &engine.renderer.depth_texture.texture_bundle.as_ref().unwrap().view,
-                                    depth_ops: Some(wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(1.0),
-                                        store: true,
-                                    }),
-                                    stencil_ops: None,
-                                },
-                            ),
-                        });
-                }
-
-                engine
-                    .renderer
-                    .queue
-                    .submit(std::iter::once(encoder.finish()));
+                // let mut encoder = engine.renderer.device.create_command_encoder(
+                //     &wgpu::CommandEncoderDescriptor {
+                //         label: Some("Render Encoder"),
+                //     },
+                // );
+                // {
+                //     let clear_frames_render_pass =
+                //         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                //             label: Some("Render Pass"),
+                //             color_attachments: &[
+                //         //     wgpu::RenderPassColorAttachment{
+                //         //     view: &engine.renderer.frame_texture.view,
+                //         //     resolve_target: None,
+                //         //     ops: wgpu::Operations{
+                //         //         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                //         //         store: true,
+                //         //     }
+                //         // },wgpu::RenderPassColorAttachment{
+                //         //     view: &engine.renderer.frame_texture_backbuffer.view,
+                //         //     resolve_target: None,
+                //         //     ops: wgpu::Operations{
+                //         //         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                //         //         store: true,
+                //         //     }
+                //         // },
+                //         ],
+                //             depth_stencil_attachment: Some(
+                //                 wgpu::RenderPassDepthStencilAttachment {
+                //                     view: &engine.renderer.depth_texture.texture_bundle.as_ref().unwrap().view,
+                //                     depth_ops: Some(wgpu::Operations {
+                //                         load: wgpu::LoadOp::Clear(1.0),
+                //                         store: true,
+                //                     }),
+                //                     stencil_ops: None,
+                //                 },
+                //             ),
+                //         });
+                // }
+                // engine
+                //     .renderer
+                //     .queue
+                //     .submit(Some(encoder.finish()));
                 engine.renderer.camera = engine.camera;
                 //engine.renderer.draw_points(&engine.camera, &mut encoder);
                 //engine.renderer.draw_mask(&engine.renderer.camera, Mask::D3, &engine.renderer.frame_texture_backbuffer, true, &mut encoder);
@@ -280,7 +304,6 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
                     height: window_size.y as u32,
                     depth_or_array_layers: 1,
                 };
-
                 for (layer, function) in engine
                     .layers
                     .iter()
@@ -309,11 +332,12 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
 
                 //This pass will draw to the screen
                 engine.renderer.draw_layers(&mut encoder);
-                // submit will accept anything that implements IntoIter
+
                 engine
                     .renderer
                     .queue
                     .submit(std::iter::once(encoder.finish()));
+                engine.renderer.present_frame();
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {elapsed_time = UNIX_EPOCH.elapsed().unwrap().as_secs_f64() - game_timer;}
@@ -331,13 +355,12 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
                 {
                     game_timer = js_sys::Date::now() as f64;
                 }
-                engine.renderer.clear_frame();
                 frame_timer += elapsed_time;
                 frame_count += 1;
                 if frame_timer >= 1.0 {
                     last_fps = frame_count;
                     engine.fps = (frame_count as f64 / frame_timer).floor() as u32;
-                    let sTitle = engine.app_name.to_string()
+                    let sTitle: String = engine.app_name.to_string()
                         + " - Avg Frame Time: "
                         + &((frame_timer / frame_count as f64) * 1000.0)
                             .round_to(2)
@@ -349,7 +372,7 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
                     frame_count = 0;
                     frame_timer -= 1.0;
                 }
-                update_inputs(&mut engine);
+                update_inputs(engine);
                 frame_processed = true;
             }
             _ => {
@@ -360,13 +383,13 @@ fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
 
         //Only run the engine if the last frame was drawn
         if frame_processed{
-            engine.renderer.new_frame();
-            if let Err(message) = olc.on_engine_update(&mut engine, elapsed_time) {
+            if let Err(message) = olc.on_engine_update(engine, elapsed_time) {
                 log::error!("{}", message);
                 println!("{}", message);
                 *control_flow = ControlFlow::Exit;
             }
-        engine.audio_system.update();
+            //engine.audio_system.update();
+            engine.renderer.new_frame();
             engine.window.request_redraw();
             frame_processed = false;
         }
@@ -438,14 +461,8 @@ fn update_inputs<D: OlcData>(engine: &mut OLCEngine<D>){
     unsafe {
 
         let window_size = unsafe { PLATFORM_DATA.window_size.as_ref().unwrap() };
-        #[cfg(not(target_arch = "wasm32"))]
         if let Some(pos) = PLATFORM_DATA.mouse_position_cache {
             PLATFORM_DATA.mouse_position = Some(pos);
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        if let Some(pos) = PLATFORM_DATA.mouse_position_cache {
-            PLATFORM_DATA.mouse_position = Some((pos.x, window_size.y as f32 - pos.y).into());
         }
         PLATFORM_DATA.mouse_wheel_delta = PLATFORM_DATA.mouse_wheel_delta_cache;
         PLATFORM_DATA.mouse_wheel_delta_cache = 0;

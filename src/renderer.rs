@@ -19,17 +19,17 @@ use winit::platform::web::WindowBuilderExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-pub const VERT_BUFFER_SIZE: usize = 25 /*MB*/ * 1024 * 1024 / std::mem::size_of::<Vertex>();
+pub const VERT_BUFFER_SIZE: usize = 150 /*MB*/ * 1024 * 1024 / std::mem::size_of::<Vertex>();
 pub const MAX_VERTICES: usize = VERT_BUFFER_SIZE;
-pub const INDEX_BUFFER_SIZE: usize = 5 /*MB*/ * 1024 * 1024 / std::mem::size_of::<u32>();
+pub const INDEX_BUFFER_SIZE: usize = 15 /*MB*/ * 1024 * 1024 / std::mem::size_of::<u32>();
 
 pub struct Renderer {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub sc_desc: wgpu::SwapChainDescriptor,
-    pub swap_chain: wgpu::SwapChain,
     pub size: winit::dpi::PhysicalSize<u32>,
+    pub surface_texture: Option<wgpu::SurfaceTexture>,
+    pub surface_texture_view: wgpu::TextureView,
     pub render_pipeline: Option<wgpu::RenderPipeline>,
     pub render_3D_pipeline_indexed: Option<wgpu::RenderPipeline>,
     pub decal_buffer: wgpu::Buffer,
@@ -41,13 +41,13 @@ pub struct Renderer {
     pub bind_group_layout: Option<wgpu::BindGroupLayout>,
     pub bind_group: Option<wgpu::BindGroup>,
     pub draw_data: Vec<DrawData>,
-    pub frame: Option<wgpu::SwapChainFrame>,
     pub layer_shader: wgpu::ShaderModule,
     pub indexed_vert_shader: wgpu::ShaderModule,
     pub camera_buffer: wgpu::Buffer,
     pub cam_sampler_uniform_group: Option<wgpu::BindGroup>,
     pub game_objects: Vec<GameObject>,
     pub meshes: Vec<Mesh>,
+    pub textures: Vec<Texture>,
     pub vertex_buffer: wgpu::Buffer,
     pub tri_count: u32,
     pub index_count: u32,
@@ -59,6 +59,8 @@ pub struct Renderer {
     pub default_texture: Texture,
     pub default_texture_bind: wgpu::BindGroup,
     pub camera: Camera,
+    pub preferred_texture_format: wgpu::TextureFormat,
+    pub surface_config: wgpu::SurfaceConfiguration,
 }
 
 impl Renderer {
@@ -67,16 +69,17 @@ impl Renderer {
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
 
         #[cfg(not(target_arch = "wasm32"))]
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::Backends::DX12);
 
         #[cfg(target_arch = "wasm32")]
-        let instance = wgpu::Instance::new(wgpu::BackendBit::all());
+        let instance = wgpu::Instance::new(wgpu::Backends::all());
 
         let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
             })
             .await
             .expect("No adapter available");
@@ -87,44 +90,40 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     #[cfg(target_arch = "wasm32")]
-                    features: wgpu::Features::default(),
+                    features: wgpu::Features::empty(),
                     #[cfg(not(target_arch = "wasm32"))]
-                    features: wgpu::Features::NON_FILL_POLYGON_MODE,
-                    limits: wgpu::Limits::default(),
+                    features: wgpu::Features::empty(),
+                    limits: adapter.limits(),
                     label: None,
                 },
                 None, // Trace path
             )
             .await
             .expect("No device available");
+        let preferred_texture_format = surface.get_preferred_format(&adapter).unwrap();
 
-        #[cfg(target_arch = "wasm32")]
-        log::warn!("DEVICE: {:?}", adapter_info);
-
-        let sc_desc = wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
-            format: adapter.get_swap_chain_preferred_format(&surface).unwrap(),
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: preferred_texture_format,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Immediate,
         };
-        let swap_chain = device.create_swap_chain(&surface, &sc_desc);
+        surface.configure(&device, &surface_config);
 
         let layer_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("layer_shader"),
-            flags: wgpu::ShaderFlags::all(),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/layer.wgsl").into()),
         });
 
         let indexed_vert_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("indexed_vert_shader"),
-            flags: wgpu::ShaderFlags::all(),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/indexed.wgsl").into()),
         });
 
         let decal_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Decal Buffer"),
-            usage: wgpu::BufferUsage::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX,
             #[cfg(not(target_arch = "wasm32"))]
             contents: bytemuck::cast_slice(&[
                 Vertex {
@@ -168,37 +167,37 @@ impl Renderer {
             contents: bytemuck::cast_slice(&[
                 Vertex {
                     position: [1.0, 1.0, 0.0].into(),
-                    tex_coords: [1.0, 1.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [-1.0, 1.0, 0.0].into(),
-                    tex_coords: [0.0, 1.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [1.0, -1.0, 0.0].into(),
                     tex_coords: [1.0, 0.0, 0.0].into(),
                     normal: Vector3::default(),
                     color: Pixel::WHITE,
                 },
                 Vertex {
-                    position: [-1.0, -1.0, 0.0].into(),
+                    position: [-1.0, 1.0, 0.0].into(),
                     tex_coords: [0.0, 0.0, 0.0].into(),
                     normal: Vector3::default(),
                     color: Pixel::WHITE,
                 },
                 Vertex {
                     position: [1.0, -1.0, 0.0].into(),
-                    tex_coords: [1.0, 0.0, 0.0].into(),
+                    tex_coords: [1.0, 1.0, 0.0].into(),
+                    normal: Vector3::default(),
+                    color: Pixel::WHITE,
+                },
+                Vertex {
+                    position: [-1.0, -1.0, 0.0].into(),
+                    tex_coords: [0.0, 1.0, 0.0].into(),
+                    normal: Vector3::default(),
+                    color: Pixel::WHITE,
+                },
+                Vertex {
+                    position: [1.0, -1.0, 0.0].into(),
+                    tex_coords: [1.0, 1.0, 0.0].into(),
                     normal: Vector3::default(),
                     color: Pixel::WHITE,
                 },
                 Vertex {
                     position: [-1.0, 1.0, 0.0].into(),
-                    tex_coords: [0.0, 1.0, 0.0].into(),
+                    tex_coords: [0.0, 0.0, 0.0].into(),
                     normal: Vector3::default(),
                     color: Pixel::WHITE,
                 },
@@ -220,13 +219,13 @@ impl Renderer {
             }
         }
         #[cfg(target_arch = "wasm32")]
-        let mut default_texture = Texture::new(&device, spr.width, spr.height, sc_desc.format);
+        let mut default_texture = Texture::new(&device, spr.width, spr.height, preferred_texture_format);
         #[cfg(not(target_arch = "wasm32"))]
         let mut default_texture = Texture::new(
             &device,
             spr.width,
             spr.height,
-            wgpu::TextureFormat::Rgba8Unorm,
+            preferred_texture_format,
         );
 
         default_texture.update(&queue, &spr);
@@ -262,21 +261,21 @@ impl Renderer {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(Primitives::cube().vertices().as_slice()),
-            usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         let blank_buff: Vec<Vertex> = vec![Vertex::default(); VERT_BUFFER_SIZE];
         let indexed_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Indexed Vertex Buffer"),
             //This is the maximum number of vertices that can be indexed with a u16
             contents: bytemuck::cast_slice(blank_buff.as_slice()),
-            usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let blank_buff: Vec<u32> = vec![0; INDEX_BUFFER_SIZE];
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(blank_buff.as_slice()),
-            usage: wgpu::BufferUsage::INDEX | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -284,7 +283,7 @@ impl Renderer {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -294,7 +293,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Sampler {
                         comparison: false,
                         filtering: false,
@@ -314,7 +313,7 @@ impl Renderer {
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: cam_data.as_slice(),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let cam_sampler_uniform_group =
@@ -346,26 +345,28 @@ impl Renderer {
             window_size.y as u32,
             wgpu::TextureFormat::Depth32Float,
         );
+        let surface_texture = Some(surface.get_current_texture().unwrap());
+        let surface_texture_view = surface_texture.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default());
         let frame_texture = Texture::new(
             &device,
             window_size.x as u32,
             window_size.y as u32,
-            sc_desc.format,
+            preferred_texture_format,
         );
         let frame_texture_backbuffer = Texture::new(
             &device,
             window_size.x as u32,
             window_size.y as u32,
-            sc_desc.format,
+            preferred_texture_format,
         );
         let active_decals = vec![];
         Self {
             surface,
             device,
             queue,
-            sc_desc,
-            swap_chain,
             size,
+            surface_texture,
+            surface_texture_view,
             render_pipeline: None,
             render_3D_pipeline_indexed: None,
             decal_buffer,
@@ -376,10 +377,10 @@ impl Renderer {
             bind_group_layout: None,
             bind_group: None,
             layer_textures: None,
-            frame: None,
             camera_buffer,
             cam_sampler_uniform_group,
             meshes: vec![],
+            textures: vec![],
             game_objects: vec![],
             draw_data: vec![],
             vertex_buffer,
@@ -395,6 +396,8 @@ impl Renderer {
             index_count: 0,
             tri_count: 0,
             camera: Camera::default(),
+            preferred_texture_format,
+            surface_config,
         }
     }
 
@@ -410,7 +413,7 @@ impl Renderer {
                 contents: bytemuck::cast_slice(
                     vec![Vertex::default(); VERT_BUFFER_SIZE].as_slice(),
                 ),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             })
     }
 
@@ -419,7 +422,7 @@ impl Renderer {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(vec![0; INDEX_BUFFER_SIZE].as_slice()),
-                usage: wgpu::BufferUsage::INDEX | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             })
     }
 
@@ -431,7 +434,7 @@ impl Renderer {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: false },
                                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -441,7 +444,7 @@ impl Renderer {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Sampler {
                                 comparison: false,
                                 filtering: false,
@@ -463,7 +466,7 @@ impl Renderer {
             buffers: &[Vertex::desc()], // 2.
         };
         let sc_desc = &[wgpu::ColorTargetState {
-            format: self.sc_desc.format,
+            format: self.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
                     operation: wgpu::BlendOperation::Add,
@@ -476,7 +479,7 @@ impl Renderer {
                     dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                 },
             }),
-            write_mask: wgpu::ColorWrite::ALL,
+            write_mask: wgpu::ColorWrites::ALL,
         }];
         let pipe_line_desc = wgpu::RenderPipelineDescriptor {
             label: Some("Setup Pipeline"),
@@ -513,7 +516,7 @@ impl Renderer {
                     entries: &[
                         wgpu::BindGroupLayoutEntry {
                             binding: 0,
-                            visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
                                 ty: wgpu::BufferBindingType::Uniform,
                                 has_dynamic_offset: false,
@@ -523,7 +526,7 @@ impl Renderer {
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
-                            visibility: wgpu::ShaderStage::VERTEX_FRAGMENT,
+                            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                             ty: wgpu::BindingType::Sampler {
                                 comparison: false,
                                 filtering: false,
@@ -573,7 +576,7 @@ impl Renderer {
                     module: &self.indexed_vert_shader,
                     entry_point: "fs_main",
                     targets: &[wgpu::ColorTargetState {
-                        format: self.sc_desc.format,
+                        format: self.preferred_texture_format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
                                 operation: wgpu::BlendOperation::Add,
@@ -586,7 +589,7 @@ impl Renderer {
                                 dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                             },
                         }),
-                        write_mask: wgpu::ColorWrite::ALL,
+                        write_mask: wgpu::ColorWrites::ALL,
                     }],
                 }),
             },
@@ -661,7 +664,6 @@ impl Renderer {
         self.device
             .create_shader_module(&wgpu::ShaderModuleDescriptor {
                 label: Some("Custom Shader"),
-                flags: wgpu::ShaderFlags::all(),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             })
     }
@@ -671,36 +673,34 @@ impl Renderer {
             width: size.x as u32,
             height: size.y as u32,
         };
-        self.sc_desc.width = size.x as u32;
-        self.sc_desc.height = size.y as u32;
+        // self.sc_desc.width = size.x as u32;
+        // self.sc_desc.height = size.y as u32;
         //self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         Rcode::Ok
     }
 
-    pub fn new_frame(&mut self) {
-        match self.frame.as_ref() {
-            None => {
-                self.frame = Some(match self.swap_chain.get_current_frame() {
-                    Ok(frame) => frame,
-                    Err(_) => {
-                        self.swap_chain =
-                            self.device.create_swap_chain(&self.surface, &self.sc_desc);
-                        self.swap_chain
-                            .get_current_frame()
-                            .expect("Failed to acquire next swap chain texture!")
-                    }
-                });
-            }
-            Some(_) => {}
+    pub fn present_frame(&mut self) {
+        if let Some(surface_texture) = self.surface_texture.take() {
+            surface_texture.present();
         }
     }
 
-    pub fn get_frame(&self) -> Result<&wgpu::SwapChainFrame, ()> {
-        Ok(self.frame.as_ref().expect("Failed to get frame"))
-    }
-
-    pub fn clear_frame(&mut self) {
-        self.frame = None;
+    pub fn new_frame(&mut self){
+        if self.surface_texture.is_none() {
+            match self.surface.get_current_texture() {
+                Ok(surface_texture) => {
+                    self.surface_texture = Some(surface_texture);
+                    self.surface_texture_view = self.surface_texture.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default());
+                },
+                Err(_) => {
+                    self.surface.configure(&self.device, &self.surface_config);
+                    self.surface_texture = Some(self.surface
+                                                .get_current_texture()
+                                                .expect("Failed to acquire next surface texture!"));
+                    self.surface_texture_view = self.surface_texture.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default());
+                }
+            }
+        }
     }
 
     pub fn add_meshes(&mut self, mut meshes: Vec<Mesh>) {
@@ -719,7 +719,7 @@ impl Renderer {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
                 contents: tris.as_slice(),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
     }
 
@@ -735,14 +735,14 @@ impl Renderer {
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Indexed Vertex Buffer"),
                     contents: bytemuck::cast_slice(verts.as_slice()),
-                    usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 });
         self.index_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
                 contents: bytemuck::cast_slice(indices.as_slice()),
-                usage: wgpu::BufferUsage::INDEX | wgpu::BufferUsage::COPY_DST,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             });
     }
 
@@ -826,7 +826,7 @@ impl Renderer {
     ) {
         render_pass.set_bind_group(0, self.cam_sampler_uniform_group.as_ref().unwrap(), &[]);
 
-        if let Some(bg) = tex_bind.as_ref() {
+        if let Some(bg) = tex_bind {
             render_pass.set_bind_group(1, bg, &[]);
         } else {
             render_pass.set_bind_group(1, &self.default_texture_bind, &[]);
@@ -858,8 +858,6 @@ impl Renderer {
         if self.meshes.is_empty() && self.game_objects.is_empty() {
             return;
         }
-
-        let frame = self.get_frame().expect("Couldn't get frame");
         let mut cam_data: Vec<u8> = bytemuck::cast_slice(&[camera.mat]).into();
         let window_size = unsafe { PLATFORM_DATA.window_size.as_ref().unwrap() };
         let (x, y) = (window_size.x as f32, window_size.y as f32);
@@ -935,12 +933,12 @@ impl Renderer {
     }
 
     pub fn draw_layers(&mut self, encoder: &mut wgpu::CommandEncoder) -> Rcode {
-        let frame = self.get_frame().expect("Couldn't get frame");
+        //let frame = self.get_frame().expect("Couldn't get frame");
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.output.view,
+                    view: &self.surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -964,11 +962,11 @@ impl Renderer {
     }
 
     pub fn clear_buffer(&mut self, p: Pixel, depth: bool) {
-        let frame = self
-            .swap_chain
-            .get_current_frame()
-            .expect("Failed to Get Frame")
-            .output;
+        // let frame = self
+        //     .swap_chain
+        //     .get_current_frame()
+        //     .expect("Failed to Get Frame")
+        //     .output;
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -978,7 +976,7 @@ impl Renderer {
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
-                    view: &frame.view,
+                    view: &self.surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -999,7 +997,7 @@ impl Renderer {
 
     pub fn create_texture(&mut self, width: u32, height: u32) -> i32 {
         #[cfg(target_arch = "wasm32")]
-        let format = self.sc_desc.format;
+        let format = self.preferred_texture_format;
 
         #[cfg(not(target_arch = "wasm32"))]
         let format = wgpu::TextureFormat::Rgba8Unorm;
@@ -1034,6 +1032,7 @@ impl Renderer {
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     texture: &bundle.texture,
+                    aspect: wgpu::TextureAspect::All,
                 },
                 spr.get_data(),
                 wgpu::ImageDataLayout {
@@ -1066,6 +1065,7 @@ impl Renderer {
                     mip_level: 0,
                     origin,
                     texture: &bundle.texture,
+                    aspect: wgpu::TextureAspect::All
                 },
                 bytemuck::cast_slice(data),
                 wgpu::ImageDataLayout {
@@ -1082,6 +1082,7 @@ impl Renderer {
         self.draw_data.insert(
             self.draw_data.len(),
             super::layer::DrawData::empty(mask, self).initialize(
+                &self.textures,
                 &self.device,
                 &self.queue,
                 game_objects,
@@ -1093,6 +1094,7 @@ impl Renderer {
         self.draw_data.insert(
             self.draw_data.len(),
             super::layer::DrawData::empty(mask, self).initialize(
+                &self.textures,
                 &self.device,
                 &self.queue,
                 self.game_objects
@@ -1110,7 +1112,9 @@ impl Renderer {
             .iter_mut()
             .filter(|dd| dd.mask.contains(mask))
         {
+            draw_data.clear(&self.queue);
             draw_data.update(
+                &self.textures,
                 &self.device,
                 &self.queue,
                 self.game_objects
@@ -1172,4 +1176,10 @@ impl Renderer {
         }*/
     }
     pub fn draw_triangles(triangles: &[Triangle], texture: u32) {}
+
+    pub fn get_texture(&self, index: i32) -> Option<&Texture>{
+        if index >= 0 {
+            self.textures.get(index as usize)
+        } else { None }
+    }
 }

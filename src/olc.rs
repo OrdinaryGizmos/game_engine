@@ -15,7 +15,7 @@ pub enum Rcode {
 pub type OlcFuture<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T>>>;
 
 pub trait Olc<D: 'static + OlcData> {
-    fn on_engine_start(&self, engine: &mut OLCEngine<D>) -> Result<(), &str>;
+    fn on_engine_start(&self, engine: OLCEngine<D>) -> OlcFuture<OLCEngine<D>>;
 
     fn on_engine_update(&self, engine: &mut OLCEngine<D>, elapsedTime: f64) -> Result<(), &str>;
 

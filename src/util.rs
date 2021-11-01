@@ -422,24 +422,24 @@ impl RoundTo<f32> for f32 {
 
 #[cfg(target_arch = "wasm32")]
 pub async fn get_file_as_u8(path: &str) -> Vec<u8> {
-    use wasm_bindgen::JsCast;
-    let window = web_sys::window().unwrap();
-    let request = Request::new_with_str(path).unwrap();
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .expect("No Future");
-    let resp: Response = resp_value.dyn_into().unwrap();
-    let buffer: js_sys::ArrayBuffer = JsFuture::from(resp.array_buffer().unwrap())
-        .await
-        .unwrap()
-        .dyn_into()
-        .unwrap();
-    js_sys::Uint8Array::new_with_byte_offset_and_length(&buffer, 0, buffer.byte_length() as u32)
-        .to_vec()
+        use wasm_bindgen::JsCast;
+        let window = web_sys::window().unwrap();
+        let request = Request::new_with_str(path).unwrap();
+        let resp_value = JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .expect("No Future");
+        let resp: Response = resp_value.dyn_into().unwrap();
+        let buffer: js_sys::ArrayBuffer = JsFuture::from(resp.array_buffer().unwrap())
+            .await
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+        js_sys::Uint8Array::new_with_byte_offset_and_length(&buffer, 0, buffer.byte_length() as u32)
+            .to_vec()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_file_as_u8(path: &str) -> Vec<u8> {
+pub async fn get_file_as_u8(path: &str) -> Vec<u8> {
     std::fs::read(path).expect("File does not exist")
 }
 

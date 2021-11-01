@@ -17,7 +17,7 @@ struct Uniforms{
 };
 
 [[group(0), binding(0)]]
-var uniforms: Uniforms;
+var<uniform> uniforms: Uniforms;
 [[group(0), binding(1)]]
 var r_sampler: sampler;
 
@@ -58,9 +58,9 @@ fn fs_main(
            in: VertexOutput,
            //[[builtin(position)]] frag_position: vec4<f32>
            ) -> [[location(0)]] vec4<f32>{
-    let ls = normalize(uniforms.camera_position - in.real_position.xyz);
+    let ls = normalize(in.real_position.xyz - uniforms.camera_position);
     let angle = max(dot(ls, normalize(in.vertex_normal)), 0.0);
-    let color = textureSample(r_texture, r_sampler, in.tex_coords.xy);
-    // + (in.vertex_color.xyz * angle)
+    let color = vec4<f32>(textureSample(r_texture, r_sampler, in.tex_coords.xy).xyz
+                          + (in.vertex_color.xyz * angle), 1.0);
     return color;// + (in.vertex_color * 0.05);
 }

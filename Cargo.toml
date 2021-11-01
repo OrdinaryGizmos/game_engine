@@ -3,6 +3,7 @@ name = "rust_olc_pge"
 version = "0.2.0"
 authors = ["Jonny Kenyon <granitrocky@gmail.com>"]
 edition = "2018"
+resolver = "2"
 
 [lib]
 name = "rust_olc_pge"
@@ -21,10 +22,10 @@ itertools = "0.10"
 image = "0.23"
 blend = "0.6.1"
 bmp = "0.5.0"
-cgmath = "0.17"
+cgmath = "0.18"
 env_logger = "0.7"
 log = "0.4"
-wgpu = { version = "0.9" , features = ["webgl"] }
+wgpu = { version = "0.11" , features = ["webgl"] }
 futures = "0.3"
 num-traits = "0.2.14"
 pretty-hex ="0.2.0"
@@ -36,10 +37,10 @@ gltf = { version = "0.16.0", features = ["import"] }
 bitflags = "1.2.1"
 olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
-rodio = "0.14.0"
+#rodio = "0.14.0"
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
-wasm-bindgen = "0.2.74"
+wasm-bindgen = "0.2.78"
 wasm-bindgen-futures = "*"
 winit = { version = "0.25.0",  features = ["web-sys"] }
 console_log = "0.1.2"
@@ -55,7 +56,7 @@ console_log = "0.1.2"
 js = []
 
 [target.'cfg(target_arch="wasm32")'.dependencies.web-sys]
-version = "^0.3.50"
+version = "^0.3.55"
 optional = false
 features = [
          "console",
@@ -73,8 +74,6 @@ features = [
          "NodeList",
          "Gpu",
          "GpuAdapter",
-         "GpuAdapterFeatures",
-         "GpuAdapterLimits",
          "GpuAddressMode",
          "GpuBindGroup",
          "GpuBindGroupDescriptor",
@@ -93,6 +92,7 @@ features = [
          "GpuBufferDescriptor",
          "GpuBufferUsage",
          "GpuCanvasContext",
+         "GpuCanvasConfiguration",
          "GpuColorDict",
          "GpuColorTargetState",
          "GpuColorWrite",
@@ -121,11 +121,9 @@ features = [
          "GpuFragmentState",
          "GpuFrontFace",
          "GpuImageCopyBuffer",
-         "GpuImageCopyImageBitmap",
          "GpuImageCopyTexture",
          "GpuImageDataLayout",
          "GpuIndexFormat",
-         "GpuInputStepMode",
          "GpuLoadOp",
          "GpuMapMode",
          "GpuMultisampleState",
@@ -168,8 +166,8 @@ features = [
          "GpuStorageTextureAccess",
          "GpuStorageTextureBindingLayout",
          "GpuStoreOp",
-         "GpuSwapChain",
-         "GpuSwapChainDescriptor",
+         "GpuSupportedFeatures",
+         "GpuSupportedLimits",
          "GpuTexture",
          "GpuTextureAspect",
          "GpuTextureBindingLayout",
@@ -188,6 +186,7 @@ features = [
          "GpuVertexBufferLayout",
          "GpuVertexFormat",
          "GpuVertexState",
+         "GpuVertexStepMode",
          "HtmlCanvasElement",
          "Window",
          "Element",

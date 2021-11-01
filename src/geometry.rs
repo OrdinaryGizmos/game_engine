@@ -47,7 +47,15 @@ pub struct Mesh {
     pub mesh_type: MeshType,
     pub buffer_indices: Vec<u32>,
     pub buffer_offset: u32,
-    pub texture: Option<Texture>,
+    pub textures: Vec<PBRTexture>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PBRTexture{
+    Color(usize),
+    Emissive(usize),
+    Normal(usize),
+    Roughness(usize),
 }
 
 #[repr(C)]
@@ -61,14 +69,11 @@ pub struct Vertex {
 
 impl Clone for Mesh {
     fn clone(&self) -> Self {
-        let texture = self.texture.as_ref().map(|t|{
-            Texture::uninitialized(t.data.clone())
-        });
         Self {
             mesh_type: self.mesh_type.clone(),
             buffer_indices: self.buffer_indices.clone(),
             buffer_offset: self.buffer_offset,
-            texture,
+            textures: self.textures.clone(),
         }
     }
 }
@@ -104,7 +109,7 @@ impl Vertex {
         use std::mem;
         wgpu::VertexBufferLayout {
             array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::InputStepMode::Vertex,
+            step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
                     offset: 0,
@@ -263,7 +268,7 @@ impl From<Vec<Triangle>> for Mesh {
             mesh_type: MeshType::NonIndexed(tris),
             buffer_indices: vec![],
             buffer_offset: 0,
-            texture: None,
+            textures: vec![],
         }
     }
 }
@@ -274,7 +279,7 @@ impl From<(Vec<Vertex>, Vec<u32>)> for Mesh {
             mesh_type: MeshType::Indexed(vert_index.0, vert_index.1),
             buffer_indices: vec![],
             buffer_offset: 0,
-            texture: None,
+            textures: vec![],
         }
     }
 }
@@ -685,10 +690,6 @@ impl Mesh {
                 .collect(),
             MeshType::Indexed(verts, indices) => verts.clone(),
         }
-    }
-
-    pub fn get_texture(&self) -> Option<&Texture>{
-        self.texture.as_ref()
     }
 
     pub fn as_bytes(&self) -> &[u8] {

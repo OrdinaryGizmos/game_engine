@@ -71,6 +71,18 @@ impl Into<[f32; 3]> for Vector3 {
     }
 }
 
+impl Into<cgmath::Vector3<f32>> for Vector3{
+    fn into(self) -> cgmath::Vector3<f32> {
+        cgmath::Vector3::new(self.x, self.y, self.z)
+    }
+}
+
+impl Into<cgmath::Point3<f32>> for Vector3{
+    fn into(self) -> cgmath::Point3<f32> {
+        cgmath::Point3::new(self.x, self.y, self.z)
+    }
+}
+
 impl From<[f32; 3]> for Vector3 {
     fn from(tuple: [f32; 3]) -> Self {
         Vector3 {

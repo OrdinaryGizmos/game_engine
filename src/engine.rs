@@ -1,5 +1,4 @@
 use super::{
-    audio::*,
     olc::OlcData,
     camera::Camera,
     decal::{Decal, DecalInstance, SmallD},
@@ -35,7 +34,7 @@ pub struct OLCEngine<D: OlcData + 'static> {
     pub font_decal: Decal,
     pub depth_buffer: Vec<f64>,
     pub window: winit::window::Window,
-    pub audio_system: AudioSystem
+    //pub audio_system: AudioSystem
 }
 
 impl<'e, 'l, D: OlcData + 'static> OLCEngine<D> {
