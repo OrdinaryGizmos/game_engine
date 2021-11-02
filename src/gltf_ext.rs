@@ -93,6 +93,7 @@ pub fn extract_node<'a>(
                     Some((spr, image_index))
                 };
             let mut textures: Vec<PBRTexture> = vec![];
+            let mut tex_coords: Vec<UV> = vec![];
 
             if let Some(tex) = material.emissive_texture()
             {
@@ -115,12 +116,7 @@ pub fn extract_node<'a>(
             if let Some(tex) = material.pbr_metallic_roughness().base_color_texture()
             {
                 println!("FOUND COLOR");
-                textures.insert(textures.len(), PBRTexture::Color(tex.texture().source().index()))
-            }
-
-            if let Some(vert_iter) = reader.read_positions() {
-                let vertices: Vec<[f32; 3]> = vert_iter.into_iter().collect();
-                let tex_coords: Vec<UV> = if let Some(tex_coord_iter) = reader.read_tex_coords(0) {
+                tex_coords = if let Some(tex_coord_iter) = reader.read_tex_coords(tex.tex_coord()) {
                     if let gltf::mesh::util::ReadTexCoords::F32(coords) =
                         tex_coord_iter.into_f32().unwrap()
                     {
@@ -140,6 +136,11 @@ pub fn extract_node<'a>(
                     println!("NO Coords2");
                     vec![]
                 };
+                textures.insert(textures.len(), PBRTexture::Color(tex.texture().source().index()))
+            }
+
+            if let Some(vert_iter) = reader.read_positions() {
+                let vertices: Vec<[f32; 3]> = vert_iter.into_iter().collect();
                 if let Some(ind_iter) = reader.read_indices() {
                     let ind: Vec<u32> = ind_iter.into_u32().into_iter().collect();
                     let mut new_mesh = Mesh {
@@ -227,7 +228,6 @@ pub fn texture_to_sprite (texture: gltf::texture::Texture, images: &[gltf::image
 
 pub fn image_to_sprite(image: &gltf::image::Data) -> crate::sprite::Sprite{
     let mut spr = crate::sprite::Sprite::new(image.width, image.height);
-    println!("{:?}", image.format);
     match image.format {
         gltf::image::Format::R8 => spr.set_data(&image.pixels, 1),
         gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),

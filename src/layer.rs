@@ -267,23 +267,21 @@ impl DrawData {
         for (_i, go) in game_objects.iter().enumerate() {
             let (verts, inds, vc, _) = go.get_vertices_and_indices(vertex_count, index_count);
             for mesh in &go.meshes {
-                let tex = if let Some(PBRTexture::Color(id)) =
-                    mesh.textures.iter().filter(|&t| match *t { PBRTexture::Color(_) => true, _ => false }).next(){
-
-                    if let Some(tex) = textures.get(*id) {
-                        tex.texture_bundle.as_ref().map(|bundle| {
-                            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                entries: &[wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: wgpu::BindingResource::TextureView(&bundle.view),
-                                }],
-                                label: None,
-                                layout: &device
-                                    .create_bind_group_layout(&DrawData::default_bind_group_layout()),
+                let tex = if let Some(PBRTexture::Color(id)) = mesh.get_texture(PBRTexture::Color(0)){
+                        if let Some(tex) = textures.get(*id) {
+                            tex.texture_bundle.as_ref().map(|bundle| {
+                                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    entries: &[wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgpu::BindingResource::TextureView(&bundle.view),
+                                    }],
+                                    label: None,
+                                    layout: &device
+                                        .create_bind_group_layout(&DrawData::default_bind_group_layout()),
+                                })
                             })
-                        })
-                    } else { None }
-                } else { None };
+                        } else { None }
+                    } else { None };
 
                 let mesh_index_count = mesh.buffer_indices.len() as u32;
                 let i_range = index_count..index_count + mesh_index_count;
@@ -587,33 +585,41 @@ pub fn default_layer_func<D: OlcData>(
     _game_data: &mut D,
     encoder: &mut wgpu::CommandEncoder,
 ) {
-    if let LayerInfo::Render(render_info) = &layer.layer_info {
-        {
-            if let Some(pipeline_data) = &render_info.pipeline_bundle {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Layer Pass"),
-                    color_attachments: &[wgpu::RenderPassColorAttachment {
-                        view: &renderer
-                            .frame_texture_backbuffer
-                            .texture_bundle
-                            .as_ref()
-                            .unwrap()
-                            .view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: true,
-                        },
-                    }],
-                    depth_stencil_attachment: None,
-                });
-                render_pass.set_pipeline(&pipeline_data.data.pipeline);
-                for (i, bg) in pipeline_data.data.bind_groups.iter().enumerate() {
-                    render_pass.set_bind_group(i as u32, bg, &[]);
-                }
-                render_pass.set_vertex_buffer(0, renderer.decal_buffer.slice(..));
-                render_pass.draw(0..6, 0..1);
-            }
-        }
-    }
+    renderer.draw_mask(
+        &renderer.camera,
+        Mask::D3,
+        &renderer.frame_texture,
+        Some(wgpu::Color::TRANSPARENT),
+        true,
+        None,
+    );
+    // if let LayerInfo::Render(render_info) = &layer.layer_info {
+    //     {
+    //         if let Some(pipeline_data) = &render_info.pipeline_bundle {
+    //             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+    //                 label: Some("Layer Pass"),
+    //                 color_attachments: &[wgpu::RenderPassColorAttachment {
+    //                     view: &renderer
+    //                         .frame_texture_backbuffer
+    //                         .texture_bundle
+    //                         .as_ref()
+    //                         .unwrap()
+    //                         .view,
+    //                     resolve_target: None,
+    //                     ops: wgpu::Operations {
+    //                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+    //                         store: true,
+    //                     },
+    //                 }],
+    //                 depth_stencil_attachment: None,
+    //             });
+    //             render_pass.set_pipeline(&pipeline_data.data.pipeline);
+    //             for (i, bg) in pipeline_data.data.bind_groups.iter().enumerate() {
+    //                 render_pass.set_bind_group(i as u32, bg, &[]);
+    //             }
+    //             render_pass.set_vertex_buffer(0, renderer.decal_buffer.slice(..));
+    //             render_pass.draw(0..6, 0..1);
+    //         }
+    //     }
+    // }
 }

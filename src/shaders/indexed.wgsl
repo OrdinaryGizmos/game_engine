@@ -61,6 +61,9 @@ fn fs_main(
     let ls = normalize(in.real_position.xyz - uniforms.camera_position);
     let angle = max(dot(ls, normalize(in.vertex_normal)), 0.0);
     let color = vec4<f32>(textureSample(r_texture, r_sampler, in.tex_coords.xy).xyz
-                          + (in.vertex_color.xyz * angle), 1.0);
+                          + (in.vertex_color.xyz * angle * 0.05), 1.0);
+
+    // let color = textureSample(r_texture, r_sampler, in.tex_coords.xy);
+
     return color;// + (in.vertex_color * 0.05);
 }

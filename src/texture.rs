@@ -46,11 +46,11 @@ impl Texture {
         }
     }
     pub fn new_from_sprite(
-        device: &wgpu::Device,
+        renderer: &Renderer,
         data: Sprite,
         format: wgpu::TextureFormat,
     ) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = renderer.device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: data.width,
                 height: data.height,
@@ -67,14 +67,16 @@ impl Texture {
             label: None,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self {
+        let mut tex = Self {
             data,
             texture_bundle: Some(TextureBundle {
                 texture,
                 view,
                 format,
             }),
-        }
+        };
+        tex.update_internal(renderer);
+        tex
     }
 
     pub fn uninitialized(data: Sprite) -> Self {

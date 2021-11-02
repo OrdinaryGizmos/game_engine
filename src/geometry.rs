@@ -348,7 +348,7 @@ impl UV {
 }
 
 impl Mesh {
-    fn get_values(data: &str) -> (f32, f32, f32) {
+    pub fn get_values(data: &str) -> (f32, f32, f32) {
         let items: Vec<&str> = data.split(' ').collect();
         (
             items[1].parse::<f32>().unwrap(),
@@ -357,12 +357,24 @@ impl Mesh {
         )
     }
 
-    fn get_uv_values(data: &str) -> (f32, f32) {
+    pub fn get_uv_values(data: &str) -> (f32, f32) {
         let items: Vec<&str> = data.split(' ').collect();
         (
             items[1].parse::<f32>().unwrap(),
             items[2].parse::<f32>().unwrap(),
         )
+    }
+
+    pub fn get_texture(&self, texture_type: PBRTexture) -> Option<&PBRTexture> {
+        self.textures.iter().filter(|&t|
+                                    match (*t, texture_type) {
+                                        (PBRTexture::Color(_), PBRTexture::Color(_)) => true,
+                                        (PBRTexture::Emissive(_), PBRTexture::Emissive(_)) => true,
+                                        (PBRTexture::Normal(_), PBRTexture::Normal(_)) => true,
+                                        (PBRTexture::Roughness(_), PBRTexture::Roughness(_)) => true,
+                                        _ => false
+                                    }
+        ).next()
     }
 
     fn read_buffer<R: std::io::BufRead>(reader: R, has_texture: bool) -> Mesh {
