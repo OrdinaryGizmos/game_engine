@@ -31,12 +31,12 @@ inline-spirv = "0.1.2"
 bytemuck = { version = "1.4", features = [ "derive" ] }
 gltf = { version = "0.16.0", features = ["import"] }
 bitflags = "1.2.1"
-olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
+#olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
 #rodio = "0.14.0"
 
 [target.'cfg(target_arch = "windows")'.dependencies]
-rapier = {version = "*", features = [ "simd-nightly" ] }
+rapier3d = {version = "*", features = [ "simd-nightly" ] }
 lazy_static = "*"
 bmp = "0.5.0"
 rand = "*"
@@ -44,7 +44,7 @@ rand = "*"
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = "0.2.78"
 wasm-bindgen-futures = "*"
-rapier = {version = "*", features = [ "wasm-bindgen", "simd-nightly" ] } 
+rapier3d = {version = "*", features = [ "wasm-bindgen", "simd-nightly" ] } 
 winit = { version = "0.25.0",  features = ["web-sys"] }
 console_log = "0.1.2"
 instant = "0.1.9"
