@@ -12,10 +12,6 @@ crate-type = ["rlib"]
 [build-dependencies]
 bindgen = "0.59"
 
-[target.'cfg(target_arch = "windows")'.dependencies]
-lazy_static = "*"
-bmp = "0.5.0"
-rand = "*"
 
 [dependencies]
 itertools = "0.10"
@@ -39,9 +35,16 @@ olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
 #rodio = "0.14.0"
 
+[target.'cfg(target_arch = "windows")'.dependencies]
+rapier = {version = "*", features = [ "simd-nightly" ] }
+lazy_static = "*"
+bmp = "0.5.0"
+rand = "*"
+
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = "0.2.78"
 wasm-bindgen-futures = "*"
+rapier = {version = "*", features = [ "wasm-bindgen", "simd-nightly" ] } 
 winit = { version = "0.25.0",  features = ["web-sys"] }
 console_log = "0.1.2"
 instant = "0.1.9"
