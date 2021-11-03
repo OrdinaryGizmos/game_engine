@@ -10,7 +10,7 @@ use super::{
     sprite::Sprite,
     texture::Texture,
     util::{Vf2d, Vi2d},
-    olc::Rcode,
+    og_engine::Rcode,
 };
 use wgpu::util::DeviceExt;
 

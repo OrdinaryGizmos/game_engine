@@ -2,7 +2,7 @@ use super::{
     decal::DecalInstance,
     game_object::GameObject,
     geometry::{Vertex, PBRTexture},
-    olc::OlcData,
+    og_engine::OGData,
     pixel::Pixel,
     renderer::Renderer,
     sprite::{Sprite, SpriteMode},
@@ -14,11 +14,11 @@ use bitflags::bitflags;
 
 type Func<D> = Box<dyn Fn(&LayerDesc<D>, &Renderer, &mut D, &mut wgpu::CommandEncoder)>;
 
-pub struct LayerFunc<D: OlcData + 'static> {
+pub struct LayerFunc<D: OGData + 'static> {
     func: Func<D>,
 }
 
-impl<D: OlcData + 'static> LayerFunc<D> {
+impl<D: OGData + 'static> LayerFunc<D> {
     pub fn empty() -> Self {
         Self {
             func: Box::new(|_, _, _, _| {}),
@@ -44,7 +44,7 @@ impl<D: OlcData + 'static> LayerFunc<D> {
     }
 }
 
-pub struct LayerDesc<D: OlcData + 'static> {
+pub struct LayerDesc<D: OGData + 'static> {
     pub id: u32,
     pub shown: bool,
     pub layer_info: LayerInfo<D>,
@@ -60,12 +60,12 @@ pub struct Image {
     pub tint: Pixel,
 }
 
-pub struct Render<D: OlcData + 'static> {
+pub struct Render<D: OGData + 'static> {
     pub mask: u32,
     pub pipeline_bundle: Option<PipelineBundle<D>>,
 }
 
-pub enum LayerInfo<D: OlcData + 'static> {
+pub enum LayerInfo<D: OGData + 'static> {
     Image(Image),
     Render(Render<D>),
 }
@@ -119,7 +119,7 @@ pub struct PipelineData {
     pub bind_group_layouts: Vec<wgpu::BindGroupLayout>,
     pub shader: wgpu::ShaderModule,
 }
-pub struct PipelineBundle<D: OlcData + 'static> {
+pub struct PipelineBundle<D: OGData + 'static> {
     pub func: LayerFunc<D>,
     pub data: PipelineData,
 }
@@ -141,7 +141,7 @@ const fn default_image() -> Image {
     }
 }
 
-impl<D: OlcData + 'static> LayerDesc<D> {
+impl<D: OGData + 'static> LayerDesc<D> {
     pub fn empty(layer_type: LayerType) -> Self {
         match layer_type {
             LayerType::Image => LayerDesc {
@@ -200,7 +200,7 @@ impl<D: OlcData + 'static> LayerDesc<D> {
     }
 }
 
-impl<D: OlcData + 'static> PipelineBundle<D> {
+impl<D: OGData + 'static> PipelineBundle<D> {
     pub fn create(func: LayerFunc<D>, data: PipelineData) -> Self {
         Self { func, data }
     }
@@ -579,7 +579,7 @@ impl PipelineData {
     }
 }
 
-pub fn default_layer_func<D: OlcData>(
+pub fn default_layer_func<D: OGData>(
     layer: &LayerDesc<D>,
     renderer: &Renderer,
     _game_data: &mut D,

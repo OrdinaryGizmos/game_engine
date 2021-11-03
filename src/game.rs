@@ -1,11 +1,11 @@
 //use crate::audio::AudioSystem;
 
 use super::{
-    olc::Olc,
-    olc::OlcData,
+    og_engine::OGGame,
+    og_engine::OGData,
     camera::Camera,
     decal::Decal,
-    engine::OLCEngine,
+    engine::OGEngine,
     layer::{LayerDesc, LayerType, LayerFunc, LayerInfo},
     platform::{PLATFORM_DATA, Platform, PlatformWindows},
     renderer::Renderer,
@@ -23,8 +23,8 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
-    olc: T,
+pub fn construct<T: 'static + OGGame<D>, D: 'static + OGData>(
+    game: T,
     game_data: D,
     app_name: &'static str,
     screen_width: u32,
@@ -34,7 +34,6 @@ pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
     full_screen: bool,
     vsync: bool,
 ) {
-    //Set the olc object to be used in this crate
     #[cfg(target_arch = "wasm32")]
     console_error_panic_hook::set_once();
     #[cfg(target_arch = "wasm32")]
@@ -55,7 +54,7 @@ pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
         PLATFORM_DATA.pixel_size = Some(Vi2d::new(pixel_width as i32, pixel_height as i32));
     };
     let game_start = start_game(
-        olc,
+        game,
         game_data,
         app_name,
         screen_width,
@@ -75,7 +74,7 @@ pub fn construct<T: 'static + Olc<D>, D: 'static + OlcData>(
 
 }
 
-async fn finish_setup<D: 'static + OlcData>(
+async fn finish_setup<D: 'static + OGData>(
     game_data: D,
     app_name: &'static str,
     screen_width: u32,
@@ -85,7 +84,7 @@ async fn finish_setup<D: 'static + OlcData>(
     full_screen: bool,
     vsync: bool,
     window: winit::window::Window,
-) -> OLCEngine<D>{
+) -> OGEngine<D>{
 
 
     #[cfg(target_arch = "wasm32")]
@@ -106,7 +105,7 @@ async fn finish_setup<D: 'static + OlcData>(
     // let audio_system =
     //         AudioSystem::create_system();
 
-    let mut engine = OLCEngine {
+    let mut engine = OGEngine {
         app_name: String::from(""),
         is_focused: true,
         window_width: 0,
@@ -142,8 +141,8 @@ async fn finish_setup<D: 'static + OlcData>(
     engine
 }
 
-async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
-    olc: T,
+async fn start_game<T: OGGame<D> + 'static, D: OGData + 'static>(
+    game: T,
     game_data: D,
     app_name: &'static str,
     screen_width: u32,
@@ -160,7 +159,7 @@ async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
     );
 
 
-    let mut engine: OLCEngine<D> = finish_setup(
+    let mut engine: OGEngine<D> = finish_setup(
         game_data,
         app_name,
         screen_width,
@@ -205,7 +204,7 @@ async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
     let mut game_timer = js_sys::Date::now() as f64;
 
     //game_engine.construct_font_sheet();
-    let mut engine_owned = olc.on_engine_start(engine).await;
+    let mut engine_owned = game.on_engine_start(engine).await;
     event_loop.run(move |top_event, window_target, control_flow| {
         let mut engine = &mut engine_owned;
         *control_flow = ControlFlow::Poll;
@@ -383,7 +382,7 @@ async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
 
         //Only run the engine if the last frame was drawn
         if frame_processed{
-            if let Err(message) = olc.on_engine_update(engine, elapsed_time) {
+            if let Err(message) = game.on_engine_update(engine, elapsed_time) {
                 log::error!("{}", message);
                 println!("{}", message);
                 *control_flow = ControlFlow::Exit;
@@ -400,7 +399,7 @@ async fn start_game<T: Olc<D> + 'static, D: OlcData + 'static>(
     });
 }
 
-fn update_inputs<D: OlcData>(engine: &mut OLCEngine<D>){
+fn update_inputs<D: OGData>(engine: &mut OGEngine<D>){
     unsafe{
         let hw_func = |keys: &mut Vec<HWButton>,
         keys_old: &mut Vec<bool>,

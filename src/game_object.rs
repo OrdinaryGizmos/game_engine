@@ -1,7 +1,7 @@
 #![allow(clippy::many_single_char_names)]
 use super::{
     camera::Camera,
-    engine::OLCEngine,
+    engine::OGEngine,
     geometry::{Mesh, MeshType, Triangle, Vertex},
     layer::{LayerMask, Mask},
     math_3d::{Rotor3, Vector3},
@@ -269,11 +269,11 @@ impl GameObject {
         }
     }
 
-    pub fn draw<D: crate::olc::OlcData>(
+    pub fn draw<D: crate::og_engine::OGData>(
         &self,
         layer: u32,
         camera: Camera,
-        engine: &mut OLCEngine<D>,
+        engine: &mut OGEngine<D>,
     ) {
         if self.sprite.is_none() {
             return;

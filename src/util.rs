@@ -1,5 +1,5 @@
 use super::{
-    olc::Rcode,
+    og_engine::Rcode,
     pixel::Pixel,
     sprite::Sprite,
 };

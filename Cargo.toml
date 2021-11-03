@@ -1,12 +1,12 @@
 [package]
-name = "rust_olc_pge"
+name = "og_engine"
 version = "0.2.0"
 authors = ["Jonny Kenyon <granitrocky@gmail.com>"]
 edition = "2018"
 resolver = "2"
 
 [lib]
-name = "rust_olc_pge"
+name = "og_engine"
 crate-type = ["rlib"]
 
 [build-dependencies]
@@ -36,7 +36,7 @@ quote = "1.0"
 #rodio = "0.14.0"
 
 [target.'cfg(target_arch = "windows")'.dependencies]
-rapier = {version = "*", features = [ "simd-nightly" ] }
+rapier3d = {version = "*", features = [ "simd-nightly" ] }
 lazy_static = "*"
 bmp = "0.5.0"
 rand = "*"
@@ -44,7 +44,7 @@ rand = "*"
 [target.'cfg(target_arch="wasm32")'.dependencies]
 wasm-bindgen = "0.2.78"
 wasm-bindgen-futures = "*"
-rapier = {version = "*", features = [ "wasm-bindgen", "simd-nightly" ] } 
+rapier3d = {version = "*", features = [ "wasm-bindgen", "simd-nightly" ] } 
 winit = { version = "0.25.0",  features = ["web-sys"] }
 console_log = "0.1.2"
 instant = "0.1.9"

@@ -1,5 +1,5 @@
 use super::{
-    olc::OlcData,
+    og_engine::OGData,
     camera::Camera,
     decal::{Decal, DecalInstance, SmallD},
     geometry::{Triangle, UV, Mesh, Vertex},
@@ -12,7 +12,7 @@ use super::{
 };
 use std::sync::Arc;
 
-pub struct OLCEngine<D: OlcData + 'static> {
+pub struct OGEngine<D: OGData + 'static> {
     pub app_name: String,
     pub is_focused: bool,
     pub window_width: u32,
@@ -37,7 +37,7 @@ pub struct OLCEngine<D: OlcData + 'static> {
     //pub audio_system: AudioSystem
 }
 
-impl<'e, 'l, D: OlcData + 'static> OLCEngine<D> {
+impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
     pub fn init(
         &mut self,
         app_name: &str,

@@ -6,7 +6,7 @@
 #![feature(vec_into_raw_parts)]
 //#![feature(nll)]
 
-pub mod olc;
+pub mod og_engine;
 // pub mod app;
 //pub mod audio;
 pub mod camera;
@@ -31,7 +31,7 @@ pub mod transform;
 pub mod util;
 
 //pub mod steam_audio_bindgen;
-use olc_pge_macros as macros;
+//use olc_pge_macros as macros;
 
 pub mod prelude {
     pub use crate::{
@@ -55,9 +55,9 @@ pub mod prelude {
         transform, transform::*,
         util, util::*,
         //steam_audio_bindgen as phonon, steam_audio as effects,
-        olc::Olc,
-        olc::OlcData,
-        olc::OlcFuture,
-        olc::Rcode,
+        og_engine::OGGame,
+        og_engine::OGData,
+        og_engine::OGFuture,
+        og_engine::Rcode,
     };
 }
