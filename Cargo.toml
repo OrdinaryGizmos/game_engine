@@ -31,7 +31,7 @@ inline-spirv = "0.1.2"
 bytemuck = { version = "1.4", features = [ "derive" ] }
 gltf = { version = "0.16.0", features = ["import"] }
 bitflags = "1.2.1"
-olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
+#olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
 #rodio = "0.14.0"
 
