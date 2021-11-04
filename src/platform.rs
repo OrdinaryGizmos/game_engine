@@ -8,8 +8,11 @@ use winit::platform::web::WindowBuilderExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-#[cfg(not(target_arch="wasm32"))]
+#[cfg(target_os="windows")]
 use winit::platform::windows::WindowBuilderExtWindows;
+
+#[cfg(target_os="linux")]
+use winit::platform::unix::WindowBuilderExtUnix;
 
 use winit::{
     event::{ElementState, Event, MouseScrollDelta, WindowEvent},
