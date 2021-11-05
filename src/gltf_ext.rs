@@ -64,7 +64,6 @@ pub fn extract_node<'a>(
             scale,
         } => {
             //Transform3::default()
-            println!("{:?}", rotation);
             Transform3 {
                 rot: Rotor3::from_quat(rotation),
                 scale: scale.into(),
@@ -97,25 +96,21 @@ pub fn extract_node<'a>(
 
             if let Some(tex) = material.emissive_texture()
             {
-                println!("FOUND EMISSIVE");
                 textures.insert(textures.len(), PBRTexture::Emissive(tex.texture().source().index()))
             }
 
             if let Some(tex) = material.normal_texture()
             {
-                println!("FOUND NORMAL");
                 textures.insert(textures.len(), PBRTexture::Normal(tex.texture().source().index()))
             }
 
             if let Some(tex) = material.pbr_metallic_roughness().metallic_roughness_texture()
             {
-                println!("FOUND ROUGHNESS");
                 textures.insert(textures.len(), PBRTexture::Roughness(tex.texture().source().index()))
             }
 
             if let Some(tex) = material.pbr_metallic_roughness().base_color_texture()
             {
-                println!("FOUND COLOR");
                 tex_coords = if let Some(tex_coord_iter) = reader.read_tex_coords(tex.tex_coord()) {
                     if let gltf::mesh::util::ReadTexCoords::F32(coords) =
                         tex_coord_iter.into_f32().unwrap()
