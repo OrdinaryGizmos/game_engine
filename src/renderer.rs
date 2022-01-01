@@ -218,9 +218,7 @@ impl Renderer {
                 }
             }
         }
-        #[cfg(target_arch = "wasm32")]
-        let mut default_texture = Texture::new(&device, spr.width, spr.height, preferred_texture_format);
-        #[cfg(not(target_arch = "wasm32"))]
+
         let mut default_texture = Texture::new(
             &device,
             spr.width,
@@ -1000,7 +998,7 @@ impl Renderer {
         let format = self.preferred_texture_format;
 
         #[cfg(not(target_arch = "wasm32"))]
-        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let format = self.preferred_texture_format;
 
         let texture = Texture::new(&self.device, width, height, format);
 

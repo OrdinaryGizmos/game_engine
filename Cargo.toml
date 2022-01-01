@@ -2,7 +2,7 @@
 name = "og_engine"
 version = "0.2.0"
 authors = ["Jonny Kenyon <granitrocky@gmail.com>"]
-edition = "2018"
+edition = "2021"
 resolver = "2"
 
 [lib]
@@ -31,8 +31,11 @@ inline-spirv = "0.1.2"
 bytemuck = { version = "1.4", features = [ "derive" ] }
 gltf = { version = "0.16.0", features = ["import"] }
 bitflags = "1.2.1"
+serde = "1.0"
+serde_yaml = "0.8"
 #olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
+rapier3d = {version = "*", features = [ "simd-nightly" ] }
 #rodio = "0.14.0"
 
 [target.'cfg(target_arch = "windows")'.dependencies]

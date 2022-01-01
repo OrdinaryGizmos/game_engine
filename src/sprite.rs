@@ -1,27 +1,31 @@
 use super::{pixel::Pixel, renderer::Renderer, util::ImageLoader};
+use wgpu::TextureFormat;
 #[derive(Clone, Default)]
 pub struct Sprite {
     pub mode_sample: SpriteMode,
+    pub format: TextureFormat,
     pub width: u32,
     pub height: u32,
     pub col_data: Vec<Pixel>,
 }
 
 impl Sprite {
-    pub fn new(width: u32, height: u32) -> Sprite {
+    pub fn new(width: u32, height: u32, format: TextureFormat) -> Sprite {
         let image_size = (width * height) as usize;
         Sprite {
             mode_sample: SpriteMode::Normal,
+            format,
             width,
             height,
             col_data: vec![Pixel::BLANK; image_size],
         }
     }
 
-    pub fn new_with_data(width: u32, height: u32, col_data: Vec<Pixel>) -> Sprite {
+    pub fn new_with_data(width: u32, height: u32, col_data: Vec<Pixel>, format: TextureFormat) -> Sprite {
         let image_size = (width * height) as usize;
         Sprite {
             mode_sample: SpriteMode::Normal,
+            format,
             width,
             height,
             col_data,
@@ -88,11 +92,13 @@ impl Sprite {
     }
 
     pub fn get_data(&self) -> &[u8] {
+        use wgpu::TextureFormat; //unsafe { std::slice::from_raw_parts(p_ptr, self.col_data.len() * 4) }
         let p_ptr = self.col_data.as_slice() as *const _ as *const u8;
         unsafe { std::slice::from_raw_parts(p_ptr, self.col_data.len() * 4) }
     }
 
     pub fn set_data(&mut self, data: &[u8], stride: u32) {
+        let base_color: u32 = if stride == 4 { 0x00000000 } else { 0xFF000000 };
         self.col_data = data
             .chunks(stride as usize)
             .into_iter()
@@ -101,7 +107,9 @@ impl Sprite {
                     c.iter()
                         .take(stride.min(4) as usize)
                         .enumerate()
-                        .fold(0xFF000000, |out, (i, u)| out | (*u as u32) << (i as u32 * 8)),
+                        .fold(base_color, |out, (i, u)| {
+                            out | (*u as u32) << (i as u32 * 8)
+                        }),
                 )
             })
             .collect();

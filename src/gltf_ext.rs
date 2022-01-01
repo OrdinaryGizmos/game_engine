@@ -124,11 +124,9 @@ pub fn extract_node<'a>(
                             })
                             .collect()
                     } else {
-                        println!("NO Coords");
                         vec![]
                     }
                 } else {
-                    println!("NO Coords2");
                     vec![]
                 };
                 textures.insert(textures.len(), PBRTexture::Color(tex.texture().source().index()))

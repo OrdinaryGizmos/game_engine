@@ -133,6 +133,7 @@ const fn default_image() -> Image {
             height: 0,
             width: 0,
             mode_sample: SpriteMode::Normal,
+            format: wgpu::TextureFormat::R16Uint,
         },
         update: false,
         offset: Vf2d { x: 0.0, y: 0.0 },
