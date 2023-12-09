@@ -12,7 +12,7 @@ use winit::platform::web::WindowExtWebSys;
 use winit::platform::windows::WindowBuilderExtWindows;
 
 #[cfg(target_os="linux")]
-use winit::platform::unix::WindowBuilderExtUnix;
+use winit::platform::x11::WindowBuilderExtX11;
 
 use winit::{
     event::{ElementState, Event, MouseScrollDelta, WindowEvent},

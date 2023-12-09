@@ -8,11 +8,13 @@ pub struct World<'a> {
     island_manager: IslandManager,
     broad_phase: BroadPhase,
     narrow_phase: NarrowPhase,
-    joint_set: JointSet,
+    impulse_joint_set: ImpulseJointSet,
+    multibody_joint_set: MultibodyJointSet,
     ccd_solver: CCDSolver,
     gravity: Vector<f32>,
-    hooks: &'a dyn PhysicsHooks<RigidBodySet, ColliderSet>,
-    events: &'a dyn EventHandler
+    hooks: &'a dyn PhysicsHooks,
+    events: &'a dyn EventHandler,
+    query_pipeline: Option<&'a mut QueryPipeline>
 }
 
 impl Default for World<'_>{
@@ -31,11 +33,13 @@ impl World<'_> {
             island_manager: IslandManager::new(),
             broad_phase: BroadPhase::new(),
             narrow_phase: NarrowPhase::new(),
-            joint_set: JointSet::new(),
+            impulse_joint_set: ImpulseJointSet::new(),
+            multibody_joint_set: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
             gravity: vector![0.0, -9.81, 0.0],
             hooks: &(),
             events: &(),
+            query_pipeline: None
         }
     }
 
@@ -48,8 +52,10 @@ impl World<'_> {
             &mut self.narrow_phase,
             &mut self.rigid_bodies,
             &mut self.colliders,
-            &mut self.joint_set,
+            &mut self.impulse_joint_set,
+            &mut self.multibody_joint_set,
             &mut self.ccd_solver,
+            None,
             self.hooks,
             self.events,
         );

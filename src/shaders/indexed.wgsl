@@ -1,38 +1,37 @@
 // Vertex shader
 
 struct VertexInput {
-    [[location(0)]] v_position: vec3<f32>;
-    [[location(1)]] v_tex_coords: vec3<f32>;
-    [[location(2)]] v_normal: vec3<f32>;
-    [[location(3)]] v_color: vec4<f32>;
+    @location(0) v_position: vec3<f32>,
+    @location(1) v_tex_coords: vec3<f32>,
+    @location(2) v_normal: vec3<f32>,
+    @location(3) v_color: vec4<f32>,
 };
 
-[[block]]
 struct Uniforms{
-    camera_transform: mat4x4<f32>;
-    camera_inverse_transform: mat4x4<f32>;
-    camera_position: vec3<f32>;
-    screen_width: f32;
-    screen_height: f32;
+ camera_transform: mat4x4<f32>,
+ camera_inverse_transform: mat4x4<f32>,
+ camera_position: vec3<f32>,
+ screen_width: f32,
+ screen_height: f32,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var r_sampler: sampler;
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var r_texture: texture_2d<f32>;
 
 struct VertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] vertex_normal: vec3<f32>;
-    [[location(1)]] vertex_color: vec4<f32>;
-    [[location(2)]] real_position: vec4<f32>;
-    [[location(3)]] tex_coords: vec3<f32>;
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) vertex_normal: vec3<f32>,
+    @location(1) vertex_color: vec4<f32>,
+    @location(2) real_position: vec4<f32>,
+    @location(3) tex_coords: vec3<f32>,
 };
 
-[[stage(vertex)]]
+@vertex
 fn vs_main(
            in_vertex: VertexInput
            ) -> VertexOutput {
@@ -53,11 +52,11 @@ fn vs_main(
     return out;
 }
 
-[[stage(fragment)]]
+@fragment
 fn fs_main(
            in: VertexOutput,
            //[[builtin(position)]] frag_position: vec4<f32>
-           ) -> [[location(0)]] vec4<f32>{
+           ) -> @location(0) vec4<f32>{
     let ls = normalize(in.real_position.xyz - uniforms.camera_position);
     let angle = max(dot(ls, normalize(in.vertex_normal)), 0.0);
     let color = vec4<f32>(textureSample(r_texture, r_sampler, in.tex_coords.xy).xyz

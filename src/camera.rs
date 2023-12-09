@@ -22,6 +22,7 @@ pub struct RawMat {
     pub view_proj: [[f32; 4]; 4],
     pub view_inv_proj: [[f32; 4]; 4],
     pub position: [f32; 3],
+    _padding: u32,
 }
 
 impl Default for RawMat {
@@ -30,6 +31,7 @@ impl Default for RawMat {
             view_proj: [[0.0; 4]; 4],
             view_inv_proj: [[0.0; 4]; 4],
             position: [0.0; 3],
+            _padding: 0,
         }
     }
 }

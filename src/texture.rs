@@ -34,6 +34,7 @@ impl Texture {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC,
             label: None,
+            view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
@@ -65,6 +66,7 @@ impl Texture {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC,
             label: None,
+            view_formats: &[]
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut tex = Self {
@@ -99,6 +101,7 @@ impl Texture {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC,
             label: None,
+            view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.texture_bundle = Some(TextureBundle {
@@ -125,8 +128,8 @@ impl Texture {
             self.data.get_data(),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * self.data.width as u32),
-                rows_per_image: NonZeroU32::new(0),
+                bytes_per_row: Some(4 * self.data.width as u32),
+                rows_per_image: None,
             },
             size,
         );
@@ -148,8 +151,8 @@ impl Texture {
             spr.get_data(),
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * spr.width as u32),
-                rows_per_image: NonZeroU32::new(0),
+                bytes_per_row: Some(4 * spr.width as u32),
+                rows_per_image: None,
             },
             size,
         );

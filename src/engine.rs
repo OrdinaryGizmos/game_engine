@@ -166,7 +166,7 @@ impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
     #[cfg(target_arch = "wasm32")]
     pub fn request_mouse_lock(&self) {
         self.window
-            .set_cursor_grab(true)
+            .set_cursor_grab(winit::window::CursorGrabMode::Confined)
             .expect("Can't grab cursor");
     }
 

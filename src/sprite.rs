@@ -3,18 +3,22 @@ use wgpu::TextureFormat;
 #[derive(Clone, Default)]
 pub struct Sprite {
     pub mode_sample: SpriteMode,
-    pub format: TextureFormat,
+    pub format: Option<TextureFormat>,
     pub width: u32,
     pub height: u32,
     pub col_data: Vec<Pixel>,
 }
 
 impl Sprite {
-    pub fn new(width: u32, height: u32, format: TextureFormat) -> Sprite {
+    pub fn new(width: u32, height: u32) -> Sprite {
+        Self::empty(width, height, TextureFormat::Rgba32Uint)
+    }
+
+    pub fn empty(width: u32, height: u32, format: TextureFormat) -> Sprite {
         let image_size = (width * height) as usize;
         Sprite {
             mode_sample: SpriteMode::Normal,
-            format,
+            format: Some(format),
             width,
             height,
             col_data: vec![Pixel::BLANK; image_size],
@@ -25,7 +29,7 @@ impl Sprite {
         let image_size = (width * height) as usize;
         Sprite {
             mode_sample: SpriteMode::Normal,
-            format,
+            format: Some(format),
             width,
             height,
             col_data,

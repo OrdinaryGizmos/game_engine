@@ -1,7 +1,7 @@
 use super::{
     decal::DecalInstance,
     game_object::GameObject,
-    geometry::{Vertex, PBRTexture},
+    geometry::{PBRTexture, Vertex},
     og_engine::OGData,
     pixel::Pixel,
     renderer::Renderer,
@@ -133,7 +133,7 @@ const fn default_image() -> Image {
             height: 0,
             width: 0,
             mode_sample: SpriteMode::Normal,
-            format: wgpu::TextureFormat::R16Uint,
+            format: Some(wgpu::TextureFormat::R16Uint),
         },
         update: false,
         offset: Vf2d { x: 0.0, y: 0.0 },
@@ -236,8 +236,7 @@ impl DrawData {
         self
     }
 
-    pub fn clear(&mut self,
-        queue: &wgpu::Queue){
+    pub fn clear(&mut self, queue: &wgpu::Queue) {
         let vertices: Vec<Vertex> = vec![Vertex::default(); self.vertex_buffer_length];
         let indices: Vec<u32> = vec![0; self.index_buffer_length];
         //Fill index_buffer
@@ -257,7 +256,7 @@ impl DrawData {
 
     pub fn update(
         &mut self,
-        textures: &Vec<Texture>,
+        textures: &[Texture],
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         game_objects: &[&GameObject],
@@ -265,10 +264,11 @@ impl DrawData {
         let mut vertices: Vec<Vertex> = vec![];
         let mut indices: Vec<u32> = vec![];
         let (mut index_count, mut vertex_count) = (0, 0);
-        for (_i, go) in game_objects.iter().enumerate() {
+        game_objects.iter().enumerate().for_each(|(_i, go)| {
             let (verts, inds, vc, _) = go.get_vertices_and_indices(vertex_count, index_count);
             for mesh in &go.meshes {
-                let tex = if let Some(PBRTexture::Color(id)) = mesh.get_texture(PBRTexture::Color(0)){
+                let tex =
+                    if let Some(PBRTexture::Color(id)) = mesh.get_texture(PBRTexture::Color(0)) {
                         if let Some(tex) = textures.get(*id) {
                             tex.texture_bundle.as_ref().map(|bundle| {
                                 device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -277,12 +277,17 @@ impl DrawData {
                                         resource: wgpu::BindingResource::TextureView(&bundle.view),
                                     }],
                                     label: None,
-                                    layout: &device
-                                        .create_bind_group_layout(&DrawData::default_bind_group_layout()),
+                                    layout: &device.create_bind_group_layout(
+                                        &DrawData::default_bind_group_layout(),
+                                    ),
                                 })
                             })
-                        } else { None }
-                    } else { None };
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
 
                 let mesh_index_count = mesh.buffer_indices.len() as u32;
                 let i_range = index_count..index_count + mesh_index_count;
@@ -294,7 +299,7 @@ impl DrawData {
             vertices.extend(verts);
             indices.extend(inds);
             vertex_count = vc;
-        }
+        });
         self.index_buffer_length = indices.len();
         self.vertex_buffer_length = vertices.len();
         //Fill index_buffer
@@ -344,13 +349,13 @@ impl PipelineData {
     pub fn default(renderer: &Renderer) -> Self {
         let shader = renderer
             .device
-            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("default_shader"),
                 source: wgpu::ShaderSource::Wgsl(
                     include_str!("shaders/default_postprocess.wgsl").into(),
                 ),
             });
-        let sc_desc = &[wgpu::ColorTargetState {
+        let sc_desc = &[Some(wgpu::ColorTargetState {
             format: renderer.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
@@ -365,7 +370,7 @@ impl PipelineData {
                 },
             }),
             write_mask: wgpu::ColorWrites::ALL,
-        }];
+        })];
         let bind_group_layouts = vec![
             renderer
                 .device
@@ -385,10 +390,7 @@ impl PipelineData {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                            ty: wgpu::BindingType::Sampler {
-                                comparison: false,
-                                filtering: false,
-                            },
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                             count: None,
                         },
                     ],
@@ -463,12 +465,13 @@ impl PipelineData {
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                clamp_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
+                unclipped_depth: false,
             },
             depth_stencil: None, // 1.
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         };
         let pipeline = renderer
             .device
@@ -521,7 +524,7 @@ impl PipelineData {
                     bind_group_layouts: &self.bind_group_layouts.iter().collect::<Vec<_>>(),
                     push_constant_ranges: &[],
                 });
-        let color_target = &[wgpu::ColorTargetState {
+        let color_target = &[Some(wgpu::ColorTargetState {
             format: renderer.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
@@ -536,7 +539,7 @@ impl PipelineData {
                 },
             }),
             write_mask: wgpu::ColorWrites::ALL,
-        }];
+        })];
         let depth_stencil = if use_depth {
             Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
@@ -567,12 +570,13 @@ impl PipelineData {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                clamp_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
+                unclipped_depth: false,
             },
             depth_stencil,
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         };
         self.pipeline = renderer
             .device

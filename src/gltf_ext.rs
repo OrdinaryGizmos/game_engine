@@ -135,7 +135,7 @@ pub fn extract_node<'a>(
             if let Some(vert_iter) = reader.read_positions() {
                 let vertices: Vec<[f32; 3]> = vert_iter.into_iter().collect();
                 if let Some(ind_iter) = reader.read_indices() {
-                    let ind: Vec<u32> = ind_iter.into_u32().into_iter().collect();
+                    let ind: Vec<u32> = ind_iter.into_u32().collect();
                     let mut new_mesh = Mesh {
                         mesh_type: MeshType::Indexed(
                             vertices
@@ -153,7 +153,7 @@ pub fn extract_node<'a>(
                             //   * transform.rot ) + transform.pos)
                             // .into())
                             //.collect(),
-                            ind.iter().copied().collect(),
+                            ind.to_vec(),
                         ),
                         buffer_indices: vec![],
                         buffer_offset: 0,

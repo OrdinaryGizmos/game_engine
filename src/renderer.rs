@@ -12,7 +12,7 @@ use super::{
     util::{Vf2d, Vi2d},
     og_engine::Rcode,
 };
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, InstanceFlags};
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowBuilderExtWebSys;
@@ -69,12 +69,16 @@ impl Renderer {
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
 
         #[cfg(not(target_arch = "wasm32"))]
-        let instance = wgpu::Instance::new(wgpu::Backends::DX12);
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor { backends: wgpu::Backends::VULKAN,
+                                       ..Default::default()});
 
         #[cfg(target_arch = "wasm32")]
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor { backends: wgpu::Backends::all(),
+                                       ..Default::default()});
 
-        let surface = unsafe { instance.create_surface(window) };
+        let surface = unsafe { instance.create_surface(window).unwrap() };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -100,23 +104,37 @@ impl Renderer {
             )
             .await
             .expect("No device available");
-        let preferred_texture_format = surface.get_preferred_format(&adapter).unwrap();
+
+        let capabilities = surface.get_capabilities(&adapter);
+
+        let preferred_texture_format = if(capabilities.formats.contains(&wgpu::TextureFormat::Rgba32Uint)){
+            wgpu::TextureFormat::Rgba32Uint
+        } else{
+            capabilities.formats[0]
+        };
+        let present_mode = if(capabilities.present_modes.contains(&wgpu::PresentMode::Immediate)){
+            wgpu::PresentMode::Immediate
+        } else{
+            wgpu::PresentMode::Fifo
+        };
 
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: preferred_texture_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Immediate,
+            present_mode,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
         };
         surface.configure(&device, &surface_config);
 
-        let layer_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let layer_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("layer_shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/layer.wgsl").into()),
         });
 
-        let indexed_vert_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let indexed_vert_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("indexed_vert_shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/indexed.wgsl").into()),
         });
@@ -124,46 +142,6 @@ impl Renderer {
         let decal_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Decal Buffer"),
             usage: wgpu::BufferUsages::VERTEX,
-            #[cfg(not(target_arch = "wasm32"))]
-            contents: bytemuck::cast_slice(&[
-                Vertex {
-                    position: [1.0, 1.0, 0.0].into(),
-                    tex_coords: [1.0, 0.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [-1.0, 1.0, 0.0].into(),
-                    tex_coords: [0.0, 0.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [1.0, -1.0, 0.0].into(),
-                    tex_coords: [1.0, 1.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [-1.0, -1.0, 0.0].into(),
-                    tex_coords: [0.0, 1.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [1.0, -1.0, 0.0].into(),
-                    tex_coords: [1.0, 1.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-                Vertex {
-                    position: [-1.0, 1.0, 0.0].into(),
-                    tex_coords: [0.0, 0.0, 0.0].into(),
-                    normal: Vector3::default(),
-                    color: Pixel::WHITE,
-                },
-            ]),
-            #[cfg(target_arch = "wasm32")]
             contents: bytemuck::cast_slice(&[
                 Vertex {
                     position: [1.0, 1.0, 0.0].into(),
@@ -292,22 +270,19 @@ impl Renderer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Sampler {
-                        comparison: false,
-                        filtering: false,
-                    },
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                     count: None,
                 },
             ],
         });
         let mut cam_data: Vec<u8> = bytemuck::cast_slice(&[RawMat::default()]).into();
         let window_size = unsafe { PLATFORM_DATA.window_size.as_ref().unwrap() };
-        unsafe {
-            let x_bytes: [u8; 4] = std::mem::transmute(window_size.x);
-            let y_bytes: [u8; 4] = std::mem::transmute(window_size.y);
-            cam_data.extend_from_slice(&x_bytes);
-            cam_data.extend_from_slice(&y_bytes);
-        }
+        let x_bytes: [u8; 4] = window_size.x.to_ne_bytes();
+        let y_bytes: [u8; 4] = window_size.y.to_ne_bytes();
+        let padding: [u8; 8] = [0; 8];
+        cam_data.extend_from_slice(&x_bytes);
+        cam_data.extend_from_slice(&y_bytes);
+        cam_data.extend_from_slice(&padding);
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: cam_data.as_slice(),
@@ -443,10 +418,7 @@ impl Renderer {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler {
-                                comparison: false,
-                                filtering: false,
-                            },
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                             count: None,
                         },
                     ],
@@ -463,7 +435,7 @@ impl Renderer {
             entry_point: "vs_main",     // 1.
             buffers: &[Vertex::desc()], // 2.
         };
-        let sc_desc = &[wgpu::ColorTargetState {
+        let sc_desc = &[Some(wgpu::ColorTargetState {
             format: self.preferred_texture_format,
             blend: Some(wgpu::BlendState {
                 color: wgpu::BlendComponent {
@@ -478,7 +450,7 @@ impl Renderer {
                 },
             }),
             write_mask: wgpu::ColorWrites::ALL,
-        }];
+        })];
         let pipe_line_desc = wgpu::RenderPipelineDescriptor {
             label: Some("Setup Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -495,12 +467,13 @@ impl Renderer {
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                clamp_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
+                unclipped_depth: false,
             },
             depth_stencil: None, // 1.
             multisample: wgpu::MultisampleState::default(),
+            multiview: None,
         };
         self.bind_group_layout = Some(bind_group_layout);
         self.render_pipeline = Some(self.device.create_render_pipeline(&pipe_line_desc));
@@ -525,10 +498,7 @@ impl Renderer {
                         wgpu::BindGroupLayoutEntry {
                             binding: 1,
                             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                            ty: wgpu::BindingType::Sampler {
-                                comparison: false,
-                                filtering: false,
-                            },
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                             count: None,
                         },
                     ],
@@ -545,7 +515,7 @@ impl Renderer {
             });
         self.render_3D_pipeline_indexed = Some(self.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
-                label: None,
+                label: Some("Indexed Render Pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &self.indexed_vert_shader,
@@ -558,9 +528,9 @@ impl Renderer {
                     front_face: wgpu::FrontFace::Ccw, // 2.
                     cull_mode: Some(wgpu::Face::Back),
                     // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                    clamp_depth: false,
                     polygon_mode: wgpu::PolygonMode::Fill,
                     conservative: false,
+                    unclipped_depth: false,
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth32Float,
@@ -573,7 +543,7 @@ impl Renderer {
                 fragment: Some(wgpu::FragmentState {
                     module: &self.indexed_vert_shader,
                     entry_point: "fs_main",
-                    targets: &[wgpu::ColorTargetState {
+                    targets: &[Some(wgpu::ColorTargetState {
                         format: self.preferred_texture_format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
@@ -588,8 +558,9 @@ impl Renderer {
                             },
                         }),
                         write_mask: wgpu::ColorWrites::ALL,
-                    }],
+                    })],
                 }),
+                multiview: None,
             },
         ));
     }
@@ -660,7 +631,7 @@ impl Renderer {
 
     pub fn create_shader_module(&self, shader: &str) -> wgpu::ShaderModule {
         self.device
-            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Custom Shader"),
                 source: wgpu::ShaderSource::Wgsl(shader.into()),
             })
@@ -861,9 +832,11 @@ impl Renderer {
         let (x, y) = (window_size.x as f32, window_size.y as f32);
         let x_bytes: [u8; 4] = x.to_ne_bytes();
         let y_bytes: [u8; 4] = y.to_ne_bytes();
+        let padding: [u8; 8] = [0; 8];
 
         cam_data.extend_from_slice(&x_bytes);
         cam_data.extend_from_slice(&y_bytes);
+        cam_data.extend_from_slice(&padding);
         self.queue
             .write_buffer(&self.camera_buffer, 0, cam_data.as_slice());
         let pipeline = if let Some(pipeline) = pipeline.as_ref() {
@@ -872,23 +845,23 @@ impl Renderer {
             self.render_3D_pipeline_indexed.as_ref().unwrap()
         };
         let color_attachment = if let Some(color) = clear_color {
-            [wgpu::RenderPassColorAttachment {
+            [Some(wgpu::RenderPassColorAttachment {
                 view: &target.texture_bundle.as_ref().unwrap().view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(color),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
-            }]
+            })]
         } else {
-            [wgpu::RenderPassColorAttachment {
+            [Some(wgpu::RenderPassColorAttachment {
                 view: &target.texture_bundle.as_ref().unwrap().view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
-            }]
+            })]
         };
         let depth_ops = if clear_depth {
             wgpu::LoadOp::Clear(1.0)
@@ -908,10 +881,12 @@ impl Renderer {
                     view: &self.depth_texture.texture_bundle.as_ref().unwrap().view,
                     depth_ops: Some(wgpu::Operations {
                         load: depth_ops,
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(pipeline);
             //Draw all layers that contain the mask
@@ -935,15 +910,17 @@ impl Renderer {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             if let Some(render_pipeline) = self.render_pipeline.as_ref() {
                 render_pass.set_pipeline(render_pipeline);
@@ -973,7 +950,7 @@ impl Renderer {
         {
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
-                color_attachments: &[wgpu::RenderPassColorAttachment {
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.surface_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -983,10 +960,12 @@ impl Renderer {
                             b: p.b() as f64 / 255.0,
                             a: p.a() as f64 / 255.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
         }
         // submit will accept anything that implements IntoIter
@@ -994,10 +973,6 @@ impl Renderer {
     }
 
     pub fn create_texture(&mut self, width: u32, height: u32) -> i32 {
-        #[cfg(target_arch = "wasm32")]
-        let format = self.preferred_texture_format;
-
-        #[cfg(not(target_arch = "wasm32"))]
         let format = self.preferred_texture_format;
 
         let texture = Texture::new(&self.device, width, height, format);
@@ -1035,8 +1010,8 @@ impl Renderer {
                 spr.get_data(),
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: core::num::NonZeroU32::new(4 * spr.width as u32),
-                    rows_per_image: core::num::NonZeroU32::new(0),
+                    bytes_per_row: Some(4 * spr.width as u32),
+                    rows_per_image: None,
                 },
                 size,
             );
@@ -1068,8 +1043,8 @@ impl Renderer {
                 bytemuck::cast_slice(data),
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: core::num::NonZeroU32::new(4 * width),
-                    rows_per_image: core::num::NonZeroU32::new(0),
+                    bytes_per_row: Some(4 * width),
+                    rows_per_image: None,
                 },
                 size,
             );
