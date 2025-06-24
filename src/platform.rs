@@ -79,7 +79,8 @@ pub static mut PLATFORM_DATA: PlatformData = PlatformData::create();
 
 //this is only ever updated from the Platform thread,
 // so immutable references to it are thread safe
-pub type Key = winit::event::KeyEvent;
+pub type Key = winit::keyboard::KeyCode;
+pub type KeyCode = winit::keyboard::KeyCode;
 pub struct PlatformData {
     pub mouse_focus: bool,
     pub key_focus: bool,
@@ -291,8 +292,10 @@ impl Platform for PlatformWindows {
                     is_synthetic,
                     event,
                 } => {
-                    PLATFORM_DATA
-                        .update_key_state(event.clone(), event.state == ElementState::Pressed);
+                    if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+                        PLATFORM_DATA
+                            .update_key_state(code, event.state == ElementState::Pressed);
+                    }
                 }
                 WindowEvent::MouseInput {
                     device_id: _,

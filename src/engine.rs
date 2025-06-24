@@ -45,7 +45,7 @@ pub struct OGEngine<'a, D: OGData + 'static> {
 
 impl<'e, 'l, D: OGData + 'static> ApplicationHandler for OGEngine<'e, D> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        todo!()
+        ()
     }
 
     fn window_event(

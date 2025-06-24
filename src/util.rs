@@ -439,7 +439,7 @@ pub async fn get_file_as_u8(path: &str) -> Vec<u8> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn get_file_as_u8(path: &str) -> Vec<u8> {
+pub fn get_file_as_u8(path: &str) -> Vec<u8> {
     std::fs::read(path).expect("File does not exist")
 }
 

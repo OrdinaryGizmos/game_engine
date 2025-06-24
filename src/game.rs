@@ -226,10 +226,13 @@ async fn start_game<T: OGGame<D> + 'static, D: OGData + 'static>(
 
     //game_engine.construct_font_sheet();
     let game = engine.game.clone();
-    let mut engine_owned = game.on_engine_start(engine).await;
-    let mut engine = &mut engine_owned;
+    if let Err(message) = game.on_engine_start(&mut engine) {
+        log::error!("{}", message);
+        println!("{}", message);
+        //window_target.set_control_flow(ControlFlow::Poll);
+    }
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(engine);
+    event_loop.run_app(&mut engine);
     //(move |top_event, window_target|;
     //TODO: Setup physics engine on fixed time step
     //physics();
