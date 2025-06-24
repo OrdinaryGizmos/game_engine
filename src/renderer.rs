@@ -439,7 +439,7 @@ impl Renderer<'_> {
             module: &self.layer_shader,
             entry_point: Some("vs_main"),     // 1.
             buffers: &[Vertex::desc()], // 2.
-            compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
+            compilation_options: Default::default()
         };
         let sc_desc = &[Some(wgpu::ColorTargetState {
             format: self.preferred_texture_format,
@@ -466,7 +466,7 @@ impl Renderer<'_> {
                 module: &self.layer_shader,
                 entry_point: Some("fs_main"),
                 targets: sc_desc,
-                compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
+                compilation_options: Default::default()
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -529,7 +529,7 @@ impl Renderer<'_> {
                     module: &self.indexed_vert_shader,
                     entry_point: Some("vs_main"),
                     buffers: &[Vertex::desc()],
-                    compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
+                    compilation_options: Default::default()
                 },
                 primitive: wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -568,7 +568,7 @@ impl Renderer<'_> {
                         }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
-                    compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
+                    compilation_options: Default::default()
                 }),
                 multiview: None,
                 cache: None,
