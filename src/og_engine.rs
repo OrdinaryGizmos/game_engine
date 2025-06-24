@@ -12,18 +12,6 @@ pub enum Rcode {
     NoFile,
 }
 
-pub type OGFuture<T> = std::pin::Pin<Box<dyn std::future::Future<Output = T>>>;
-
-impl<D: 'static + OGData, G: OGGame<D>> OGFutureTraits<D, G> for G {
-    fn new() -> OGFuture<G>{
-        todo!()
-    }
-}
-
-pub trait OGFutureTraits<D: 'static + OGData, G: OGGame<D>> {
-    fn new() -> OGFuture<G>;
-}
-
 pub trait OGGame<D: 'static + OGData> {
     fn on_engine_start(&self, engine: &mut OGEngine<D>) -> Result<(), &str>;
 

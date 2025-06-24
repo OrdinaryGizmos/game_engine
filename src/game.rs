@@ -2,6 +2,8 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use crate::prelude::Rcode;
+
 use super::{
     camera::Camera,
     decal::Decal,
@@ -229,7 +231,13 @@ async fn start_game<T: OGGame<D> + 'static, D: OGData + 'static>(
     if let Err(message) = game.on_engine_start(&mut engine) {
         log::error!("{}", message);
         println!("{}", message);
-        //window_target.set_control_flow(ControlFlow::Poll);
+        match event_loop
+            .create_proxy()
+            .send_event(Rcode::Fail)
+        {
+            Err(code) => log::error!("{code}"),
+            Ok(code) => (),
+        };
     }
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut engine);
@@ -239,4 +247,3 @@ async fn start_game<T: OGGame<D> + 'static, D: OGData + 'static>(
 
     engine.layers[0].shown = true;
 }
-

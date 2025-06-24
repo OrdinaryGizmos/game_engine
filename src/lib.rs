@@ -57,7 +57,6 @@ pub mod prelude {
         //steam_audio_bindgen as phonon, steam_audio as effects,
         og_engine::OGGame,
         og_engine::OGData,
-        og_engine::OGFuture,
         og_engine::Rcode,
     };
 }

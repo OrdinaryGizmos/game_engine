@@ -1,7 +1,7 @@
 use futures::io::Window;
 use winit::{application::ApplicationHandler, event::{Event, WindowEvent}};
 
-use crate::{layer::LayerFunc, math_3d::RoundTo, prelude::{OGGame, PlatformWindows}};
+use crate::{layer::LayerFunc, math_3d::RoundTo, prelude::{OGGame, PlatformWindows, Rcode}};
 
 use super::{
     camera::Camera,
@@ -43,9 +43,17 @@ pub struct OGEngine<'a, D: OGData + 'static> {
     //pub audio_system: AudioSystem
 }
 
-impl<'e, 'l, D: OGData + 'static> ApplicationHandler for OGEngine<'e, D> {
+impl<'e, 'l, D: OGData + 'static> ApplicationHandler<Rcode> for OGEngine<'e, D> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         ()
+    }
+
+    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: Rcode) {
+        match event {
+            Rcode::Fail => event_loop.exit(),
+            Rcode::Ok => todo!(),
+            Rcode::NoFile => todo!(),
+        }    
     }
 
     fn window_event(
@@ -229,7 +237,7 @@ impl<'e, 'l, D: OGData + 'static> ApplicationHandler for OGEngine<'e, D> {
             if let Err(message) = game.on_engine_update(self, elapsed_time) {
                 log::error!("{}", message);
                 println!("{}", message);
-                //window_target.set_control_flow(ControlFlow::Poll);
+                event_loop.exit();
             }
             //engine.audio_system.update();
             self.renderer.new_frame();

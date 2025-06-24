@@ -28,7 +28,7 @@ pub trait Platform {
         window_pos: Vi2d,
         window_size: Vi2d,
         full_screen: bool,
-    ) -> (Arc<Window>, EventLoop<()>);
+    ) -> (Arc<Window>, EventLoop<Rcode>);
     fn application_startup(&self) -> Rcode {
         Rcode::Ok
     }
@@ -233,8 +233,8 @@ impl Platform for PlatformWindows {
         window_pos: Vi2d,
         window_size: Vi2d,
         full_screen: bool,
-    ) -> (Arc<Window>, EventLoop<()>) {
-        let event_loop = EventLoop::new().expect("No Event Loop");
+    ) -> (Arc<Window>, EventLoop<Rcode>) {
+        let event_loop = EventLoop::<Rcode>::with_user_event().build().expect("No Event Loop");
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes().with_inner_size(
