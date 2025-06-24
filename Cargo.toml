@@ -10,32 +10,32 @@ name = "og_engine"
 crate-type = ["rlib"]
 
 [build-dependencies]
-bindgen = "0.59"
+bindgen = "0.72.0"
 
 
 [dependencies]
-itertools = "0.10"
-image = "0.23"
-blend = "0.6.1"
+itertools = "0.14.0"
+image = "0.25.6"
+blend = "0.8.0"
 bmp = "0.5.0"
 cgmath = "0.18"
-env_logger = "0.7"
+env_logger = "0.11.8"
 log = "0.4"
-wgpu = { version = "0.18" , features = ["webgl"] }
+wgpu = { version = "25" , features = ["webgl"] }
 futures = "0.3"
 num-traits = "0.2.14"
-pretty-hex ="0.2.0"
+pretty-hex ="0.4.1"
 lazy_static = "*"
-winit = { version = "0.28.0" }
-inline-spirv = "0.1.2"
+winit = { version = "0.30.11" }
+#inline-spirv = "0.1.2"
 bytemuck = { version = "1.4", features = [ "derive" ] }
-gltf = { version = "0.16.0", features = ["import"] }
-bitflags = "1.2.1"
+gltf = { version = "1.4.1", features = ["import"] }
+bitflags = "2.9.1"
 serde = "1.0"
-serde_yaml = "0.8"
+serde_yaml = "0.9.33"
 #olc_pge_macros = { version = "0.1.0", path = "../olc_pge_macros" }
 quote = "1.0"
-rapier3d = {version = "*", features = [ "simd-stable" ] }
+rapier3d = {version = "0.26.1", features = [ "simd-stable" ] }
 #rodio = "0.14.0"
 
 [target.'cfg(target_arch = "windows")'.dependencies]

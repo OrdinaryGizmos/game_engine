@@ -354,7 +354,7 @@ impl ImageLoader for PNGLoader {
         }
 
         let mut img = if let Ok(reader) = ImageReader::open(image_path){
-            reader.decode().expect("Can't decode the image").into_rgba()
+            reader.decode().expect("Can't decode the image").into_rgba8()
         } else{
             return Err(Rcode::Fail);
         };
@@ -381,7 +381,7 @@ impl ImageLoader for PNGLoader {
         let mut reader = ImageReader::new(std::io::Cursor::new(bytes));
         reader.set_format(image::ImageFormat::Png);
         let image = reader.decode();
-        let mut img = image.expect("NAAAAAA").into_rgba();
+        let mut img = image.expect("NAAAAAA").into_rgba8();
         let mut spr = Sprite::new(
         img.width(),
         img.height());

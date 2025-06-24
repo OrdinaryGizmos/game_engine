@@ -1,18 +1,23 @@
+use futures::io::Window;
+use winit::{application::ApplicationHandler, event::{Event, WindowEvent}};
+
+use crate::{layer::LayerFunc, math_3d::RoundTo, prelude::{OGGame, PlatformWindows}};
+
 use super::{
-    og_engine::OGData,
     camera::Camera,
     decal::{Decal, DecalInstance, SmallD},
-    geometry::{Triangle, UV, Mesh, Vertex},
-    layer::{LayerDesc, LayerInfo, LayerType, Image, EMPTY_IMAGE, PipelineBundle},
+    geometry::{Mesh, Triangle, Vertex, UV},
+    layer::{Image, LayerDesc, LayerInfo, LayerType, PipelineBundle, EMPTY_IMAGE},
+    og_engine::OGData,
     pixel::{Pixel, PixelMode},
-    platform::{PLATFORM_DATA, Platform, Key},
+    platform::{Key, Platform, PLATFORM_DATA},
     renderer::Renderer,
-    sprite::{Sprite},
-    util::{HWButton, Mouse, Vf2d, Vi2d, BMPLoader, ImageLoader, PNGLoader},
+    sprite::Sprite,
+    util::{BMPLoader, HWButton, ImageLoader, Mouse, PNGLoader, Vf2d, Vi2d},
 };
 use std::sync::Arc;
 
-pub struct OGEngine<D: OGData + 'static> {
+pub struct OGEngine<'a, D: OGData + 'static> {
     pub app_name: String,
     pub is_focused: bool,
     pub window_width: u32,
@@ -22,7 +27,7 @@ pub struct OGEngine<D: OGData + 'static> {
     pub pixels_w: u32,
     pub pixels_h: u32,
     pub fps: u32,
-    pub renderer: Renderer,
+    pub renderer: Renderer<'a>,
     pub camera: Camera,
     pub game_data: Box<D>,
     pub inv_screen_size: Vf2d,
@@ -33,11 +38,278 @@ pub struct OGEngine<D: OGData + 'static> {
     pub mouse_position: Vi2d,
     pub font_decal: Decal,
     pub depth_buffer: Vec<f64>,
-    pub window: winit::window::Window,
+    pub window: std::sync::Arc<winit::window::Window>,
+    pub game: std::sync::Arc<dyn OGGame<D>>,
     //pub audio_system: AudioSystem
 }
 
-impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
+impl<'e, 'l, D: OGData + 'static> ApplicationHandler for OGEngine<'e, D> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        todo!()
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let mut frame_timer: f64 = 0.0;
+        let mut frame_count: i32 = 0;
+        let mut last_fps: i32 = 0;
+        let mut frame_processed = true;
+        let mut elapsed_time: f64 = 0.0;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut game_timer = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
+
+        #[cfg(target_arch = "wasm32")]
+        let mut game_timer = js_sys::Date::now() as f64;
+
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+
+            WindowEvent::RedrawRequested => {
+                self.renderer.active_decals = vec![];
+                for layer in self.layers.iter_mut() {
+                    if let LayerInfo::Image(image_info) = &mut layer.layer_info {
+                        if layer.shown {
+                            self
+                                .renderer
+                                .active_decals
+                                .insert(layer.id as usize, layer.id);
+                        }
+                        if image_info.update {
+                            self
+                                .renderer
+                                .update_texture(layer.id as u32, &image_info.sprite);
+                            image_info.update = false;
+                        }
+                    }
+                }
+
+                // let mut encoder = engine.renderer.device.create_command_encoder(
+                //     &wgpu::CommandEncoderDescriptor {
+                //         label: Some("Render Encoder"),
+                //     },
+                // );
+                // {
+                //     let clear_frames_render_pass =
+                //         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                //             label: Some("Render Pass"),
+                //             color_attachments: &[
+                //         //     wgpu::RenderPassColorAttachment{
+                //         //     view: &engine.renderer.frame_texture.view,
+                //         //     resolve_target: None,
+                //         //     ops: wgpu::Operations{
+                //         //         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                //         //         store: true,
+                //         //     }
+                //         // },wgpu::RenderPassColorAttachment{
+                //         //     view: &engine.renderer.frame_texture_backbuffer.view,
+                //         //     resolve_target: None,
+                //         //     ops: wgpu::Operations{
+                //         //         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                //         //         store: true,
+                //         //     }
+                //         // },
+                //         ],
+                //             depth_stencil_attachment: Some(
+                //                 wgpu::RenderPassDepthStencilAttachment {
+                //                     view: &engine.renderer.depth_texture.texture_bundle.as_ref().unwrap().view,
+                //                     depth_ops: Some(wgpu::Operations {
+                //                         load: wgpu::LoadOp::Clear(1.0),
+                //                         store: true,
+                //                     }),
+                //                     stencil_ops: None,
+                //                 },
+                //             ),
+                //         });
+                // }
+                // engine
+                //     .renderer
+                //     .queue
+                //     .submit(Some(encoder.finish()));
+                self.renderer.camera = self.camera;
+                //engine.renderer.draw_points(&engine.camera, &mut encoder);
+                //engine.renderer.draw_mask(&engine.renderer.camera, Mask::D3, &engine.renderer.frame_texture_backbuffer, true, &mut encoder);
+
+                let mut encoder = self.renderer.device.create_command_encoder(
+                    &wgpu::CommandEncoderDescriptor {
+                        label: Some("Render Encoder"),
+                    },
+                );
+                let window_size = self.get_window_size();
+                let size = wgpu::Extent3d {
+                    width: window_size.x as u32,
+                    height: window_size.y as u32,
+                    depth_or_array_layers: 1,
+                };
+                for (layer, function) in self
+                    .layers
+                    .iter()
+                    .filter_map(|layer| {
+                        if layer.shown {
+                            if let LayerInfo::Render(render_info) = &layer.layer_info {
+                                Some((
+                                    layer,
+                                    &render_info
+                                        .pipeline_bundle
+                                        .as_ref()
+                                        .expect("No Pipeline Info")
+                                        .func,
+                                ))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<(&LayerDesc<D>, &LayerFunc<D>)>>()
+                {
+                    function.execute(layer, &self.renderer, &mut self.game_data, &mut encoder);
+                }
+
+                //This pass will draw to the screen
+                self.renderer.draw_layers(&mut encoder);
+
+                self
+                    .renderer
+                    .queue
+                    .submit(std::iter::once(encoder.finish()));
+                self.renderer.present_frame();
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    use std::time::UNIX_EPOCH;
+
+                    elapsed_time = UNIX_EPOCH.elapsed().unwrap().as_secs_f64() - game_timer;
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    elapsed_time = (js_sys::Date::now() as f64 - game_timer) / 1000.0;
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    game_timer = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    game_timer = js_sys::Date::now() as f64;
+                }
+                frame_timer += elapsed_time;
+                frame_count += 1;
+                if frame_timer >= 1.0 {
+                    last_fps = frame_count;
+                    self.fps = (frame_count as f64 / frame_timer).floor() as u32;
+                    let sTitle: String = self.app_name.to_string()
+                        + " - Avg Frame Time: "
+                        + &((frame_timer / frame_count as f64) * 1000.0)
+                            .round_to(2)
+                            .to_string()
+                        + " ms"
+                        + " -- FPS: "
+                        + &self.fps.to_string();
+                    PlatformWindows::set_window_title(&self.window, sTitle);
+                    frame_count = 0;
+                    frame_timer -= 1.0;
+                }
+                update_inputs(self);
+                frame_processed = true;
+            }
+            _ => PlatformWindows::handle_window_event(&self.window, &event),
+        }
+
+        //Only run the engine if the last frame was drawn
+        if frame_processed {
+            let game = self.game.clone();
+            if let Err(message) = game.on_engine_update(self, elapsed_time) {
+                log::error!("{}", message);
+                println!("{}", message);
+                //window_target.set_control_flow(ControlFlow::Poll);
+            }
+            //engine.audio_system.update();
+            self.renderer.new_frame();
+            self.window.request_redraw();
+            frame_processed = false;
+        }
+    }
+}
+
+
+fn update_inputs<D: OGData>(engine: &mut OGEngine<D>) {
+    unsafe {
+        let hw_func = |keys: &mut Vec<HWButton>,
+                       keys_old: &mut Vec<bool>,
+                       keys_new: &mut Vec<bool>,
+                       size: usize| {
+            for i in 0..size as usize {
+                keys[i].pressed = false;
+                keys[i].released = false;
+                if keys_new[i] != keys_old[i] {
+                    if keys_new[i] {
+                        keys[i].pressed = true;
+                        keys[i].released = false;
+                        keys[i].held = true;
+                    } else {
+                        keys[i].pressed = false;
+                        keys[i].released = true;
+                        keys[i].held = false;
+                    }
+                }
+                keys_old[i] = keys_new[i];
+            }
+        };
+        engine.clear_keys();
+        for (key, value_new) in PLATFORM_DATA.new_key_state_map.as_mut().unwrap() {
+            let value_old = PLATFORM_DATA
+                .old_key_state_map
+                .as_mut()
+                .unwrap()
+                .entry(key.clone())
+                .or_insert(false);
+            let current_key = PLATFORM_DATA
+                .key_map
+                .as_mut()
+                .unwrap()
+                .entry(key.clone())
+                .or_insert_with(HWButton::new);
+            if value_new != value_old {
+                if *value_new {
+                    (*current_key).pressed = true;
+                    (*current_key).released = false;
+                    (*current_key).held = true;
+                } else {
+                    (*current_key).pressed = false;
+                    (*current_key).released = true;
+                    (*current_key).held = false;
+                }
+            }
+            *value_old = *value_new
+        }
+
+        hw_func(
+            PLATFORM_DATA.mouse_map.as_mut().unwrap(),
+            PLATFORM_DATA.old_mouse_state_map.as_mut().unwrap(),
+            PLATFORM_DATA.new_mouse_state_map.as_mut().unwrap(),
+            3,
+        );
+    }
+    unsafe {
+        let window_size = unsafe { PLATFORM_DATA.window_size.as_ref().unwrap() };
+        if let Some(pos) = PLATFORM_DATA.mouse_position_cache {
+            PLATFORM_DATA.mouse_position = Some(pos);
+        }
+        PLATFORM_DATA.mouse_wheel_delta = PLATFORM_DATA.mouse_wheel_delta_cache;
+        PLATFORM_DATA.mouse_wheel_delta_cache = 0;
+    }
+}
+
+
+impl<'e, 'l, D: OGData + 'static> OGEngine<'e, D> {
     pub fn init(
         &mut self,
         app_name: &str,
@@ -353,11 +625,7 @@ impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
         Err(())
     }
 
-    pub fn setup_render_layer(
-        &mut self,
-        layer_id: u32,
-        pipeline: Option<PipelineBundle<D>>,
-    ) {
+    pub fn setup_render_layer(&mut self, layer_id: u32, pipeline: Option<PipelineBundle<D>>) {
         if let Some(layer) = self.layers.iter_mut().find(|layer| layer.id == layer_id) {
             if let LayerInfo::Render(render_info) = &mut layer.layer_info {
                 if let Some(data) = pipeline {
@@ -369,10 +637,8 @@ impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
         }
     }
 
-    pub fn get_y_up_direction(&self) -> f32{
-        unsafe{
-            PLATFORM_DATA.y_up_direction
-        }
+    pub fn get_y_up_direction(&self) -> f32 {
+        unsafe { PLATFORM_DATA.y_up_direction }
     }
 
     pub fn add_layer(&mut self, layer_type: LayerType) -> u32 {
@@ -380,7 +646,9 @@ impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
         let mut layer = LayerDesc::empty(layer_type);
         layer.id = lay_id as u32;
         self.layers.push(layer);
-        self.renderer.active_decals.insert(lay_id as usize, lay_id as u32);
+        self.renderer
+            .active_decals
+            .insert(lay_id as usize, lay_id as u32);
         self.renderer.update_layer_texture_groups();
         lay_id as u32
     }
@@ -393,7 +661,9 @@ impl<'e, 'l, D: OGData + 'static> OGEngine<D> {
         let mut layer = LayerDesc::new(layer_info);
         layer.id = lay_id as u32;
         self.layers.push(layer);
-        self.renderer.active_decals.insert(lay_id as usize, lay_id as u32);
+        self.renderer
+            .active_decals
+            .insert(lay_id as usize, lay_id as u32);
         self.renderer.update_layer_texture_groups();
         lay_id as u32
     }

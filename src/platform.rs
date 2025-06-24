@@ -2,22 +2,23 @@ use super::{
     og_engine::Rcode,
     util::{HWButton, Vf2d, Vi2d},
 };
-use std::collections::hash_map::HashMap;
+use std::{collections::hash_map::HashMap, sync::Arc};
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowBuilderExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
 
-#[cfg(target_os="windows")]
-use winit::platform::windows::WindowBuilderExtWindows;
+#[cfg(target_os = "windows")]
+use winit::platform::windows::WindowExtWindows;
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 use winit::platform::x11::WindowBuilderExtX11;
 
 use winit::{
+    dpi::PhysicalSize,
     event::{ElementState, Event, MouseScrollDelta, WindowEvent},
     event_loop::EventLoop,
-    window::{Window, WindowBuilder},
+    window::Window,
 };
 
 pub const MOUSE_BUTTONS: u8 = 5;
@@ -27,7 +28,7 @@ pub trait Platform {
         window_pos: Vi2d,
         window_size: Vi2d,
         full_screen: bool,
-    ) -> (Window, EventLoop<()>);
+    ) -> (Arc<Window>, EventLoop<()>);
     fn application_startup(&self) -> Rcode {
         Rcode::Ok
     }
@@ -52,7 +53,7 @@ pub trait Platform {
     fn set_window_title(window: &Window, title: String) -> Rcode {
         Rcode::Ok
     }
-    fn handle_window_event(window: &Window, event: &Event<()>);
+    fn handle_window_event(window: &Window, event: &WindowEvent);
     fn handle_system_event_loop(&self) -> Rcode {
         Rcode::Ok
     }
@@ -63,7 +64,7 @@ pub trait Platform {
 
 //#[cfg(not(target_arch = "wasm32"))]
 pub struct PlatformWindows {
-    pub window: Window,
+    pub window: Arc<Window>,
     pub event_loop: EventLoop<()>,
 }
 /*
@@ -78,7 +79,7 @@ pub static mut PLATFORM_DATA: PlatformData = PlatformData::create();
 
 //this is only ever updated from the Platform thread,
 // so immutable references to it are thread safe
-pub type Key = winit::event::VirtualKeyCode;
+pub type Key = winit::event::KeyEvent;
 pub struct PlatformData {
     pub mouse_focus: bool,
     pub key_focus: bool,
@@ -213,9 +214,13 @@ impl PlatformData {
 //#[cfg(not(target_arch = "wasm32"))]
 impl PlatformWindows {
     pub fn new() -> PlatformWindows {
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::new().unwrap();
         PlatformWindows {
-            window: WindowBuilder::new().build(&event_loop).unwrap(),
+            window: Arc::new(
+                event_loop
+                    .create_window(Window::default_attributes())
+                    .unwrap(),
+            ),
             event_loop,
         }
     }
@@ -227,19 +232,22 @@ impl Platform for PlatformWindows {
         window_pos: Vi2d,
         window_size: Vi2d,
         full_screen: bool,
-    ) -> (Window, EventLoop<()>) {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_inner_size(winit::dpi::Size::Logical(winit::dpi::LogicalSize {
-                width: window_size.x as f64,
-                height: window_size.y as f64,
-            }))
-            //.with_drag_and_drop(false)
-            /*.with_fullscreen(
-            Some(winit::window::Fullscreen::Borderless(
-            event_loop.available_monitors().next().expect("Wrong monitor"))))*/
-            .build(&event_loop)
-            .expect("Failed to build Window");
+    ) -> (Arc<Window>, EventLoop<()>) {
+        let event_loop = EventLoop::new().expect("No Event Loop");
+        let window = Arc::new(
+            event_loop
+                .create_window(Window::default_attributes().with_inner_size(
+                    winit::dpi::Size::Logical(winit::dpi::LogicalSize {
+                        width: window_size.x as f64,
+                        height: window_size.y as f64,
+                    }),
+                ))
+                //.with_drag_and_drop(false)
+                /*.with_fullscreen(
+                Some(winit::window::Fullscreen::Borderless(
+                event_loop.available_monitors().next().expect("Wrong monitor"))))*/
+                .expect("Failed to build Window"),
+        );
 
         (window, event_loop)
     }
@@ -250,71 +258,63 @@ impl Platform for PlatformWindows {
         Rcode::Ok
     }
 
-    fn handle_window_event(window: &Window, event: &Event<()>) {
+    fn handle_window_event(window: &Window, event: &WindowEvent) {
         unsafe {
-            if let Event::WindowEvent {
-                window_id: _,
-                ref event,
-            } = event
-            {
-                match event {
-                    WindowEvent::CursorMoved {
-                        device_id: _,
-                        position,
-                        modifiers: _,
-                    } => {
-                        PLATFORM_DATA.update_mouse(position.x as i32, position.y as i32);
-                    }
-                    WindowEvent::Resized(size) => {
-                        PLATFORM_DATA.update_window_size(size.width, size.height);
-                    }
-                    WindowEvent::Moved(position) => {
-                        PLATFORM_DATA.update_window_position(position.x, position.y);
-                    }
-                    WindowEvent::MouseWheel {
-                        device_id: _,
-                        delta: MouseScrollDelta::LineDelta(h, v),
-                        phase,
-                        modifiers: _,
-                    } => {
-                        PLATFORM_DATA.update_mouse_wheel(*v as i32);
-                    }
-                    WindowEvent::CursorLeft { device_id: _ } => {
-                        PLATFORM_DATA.update_mouse_focus(false);
-                    }
-                    WindowEvent::Focused(focus) => {
-                        PLATFORM_DATA.update_key_focus(*focus);
-                    }
-                    WindowEvent::KeyboardInput {
-                        device_id: _,
-                        input,
-                        is_synthetic,
-                    } => {
-                        if let Some(key) = input.virtual_keycode {
-                            PLATFORM_DATA
-                                .update_key_state(key, input.state == ElementState::Pressed);
-                        }
-                    }
-                    WindowEvent::MouseInput {
-                        device_id: _,
-                        state,
-                        button,
-                        modifiers: _,
-                    } => match button {
-                        winit::event::MouseButton::Left => {
-                            PLATFORM_DATA.update_mouse_state(0, state == &ElementState::Pressed)
-                        }
-                        winit::event::MouseButton::Right => {
-                            PLATFORM_DATA.update_mouse_state(1, state == &ElementState::Pressed)
-                        }
-                        winit::event::MouseButton::Middle => {
-                            PLATFORM_DATA.update_mouse_state(2, state == &ElementState::Pressed)
-                        }
-                        winit::event::MouseButton::Other(b) => PLATFORM_DATA
-                            .update_mouse_state(*b as i32, state == &ElementState::Pressed),
-                    },
-                    _ => {}
+            match event {
+                WindowEvent::CursorMoved {
+                    device_id: _,
+                    position,
+                } => {
+                    PLATFORM_DATA.update_mouse(position.x as i32, position.y as i32);
                 }
+                WindowEvent::Resized(size) => {
+                    PLATFORM_DATA.update_window_size(size.width, size.height);
+                }
+                WindowEvent::Moved(position) => {
+                    PLATFORM_DATA.update_window_position(position.x, position.y);
+                }
+                WindowEvent::MouseWheel {
+                    device_id: _,
+                    delta: MouseScrollDelta::LineDelta(h, v),
+                    phase,
+                } => {
+                    PLATFORM_DATA.update_mouse_wheel(*v as i32);
+                }
+                WindowEvent::CursorLeft { device_id: _ } => {
+                    PLATFORM_DATA.update_mouse_focus(false);
+                }
+                WindowEvent::Focused(focus) => {
+                    PLATFORM_DATA.update_key_focus(*focus);
+                }
+                WindowEvent::KeyboardInput {
+                    device_id: _,
+                    is_synthetic,
+                    event,
+                } => {
+                    PLATFORM_DATA
+                        .update_key_state(event.clone(), event.state == ElementState::Pressed);
+                }
+                WindowEvent::MouseInput {
+                    device_id: _,
+                    state,
+                    button,
+                } => match button {
+                    winit::event::MouseButton::Left => {
+                        PLATFORM_DATA.update_mouse_state(0, state == &ElementState::Pressed)
+                    }
+                    winit::event::MouseButton::Right => {
+                        PLATFORM_DATA.update_mouse_state(1, state == &ElementState::Pressed)
+                    }
+                    winit::event::MouseButton::Middle => {
+                        PLATFORM_DATA.update_mouse_state(2, state == &ElementState::Pressed)
+                    }
+                    winit::event::MouseButton::Other(b) => {
+                        PLATFORM_DATA.update_mouse_state(*b as i32, state == &ElementState::Pressed)
+                    }
+                    winit::event::MouseButton::Back => todo!(),
+                    winit::event::MouseButton::Forward => todo!(),
+                },
+                _ => {}
             }
         }
     }

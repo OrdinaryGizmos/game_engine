@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{
     camera::{Camera, RawMat},
     decal::DecalInstance,
@@ -12,19 +14,20 @@ use super::{
     util::{Vf2d, Vi2d},
     og_engine::Rcode,
 };
-use wgpu::{util::DeviceExt, InstanceFlags};
+use wgpu::{util::DeviceExt, InstanceFlags, PipelineCompilationOptions, Trace};
 
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowBuilderExtWebSys;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::WindowExtWebSys;
+use winit::window::Window;
 
 pub const VERT_BUFFER_SIZE: usize = 150 /*MB*/ * 1024 * 1024 / std::mem::size_of::<Vertex>();
 pub const MAX_VERTICES: usize = VERT_BUFFER_SIZE;
 pub const INDEX_BUFFER_SIZE: usize = 15 /*MB*/ * 1024 * 1024 / std::mem::size_of::<u32>();
 
-pub struct Renderer {
-    pub surface: wgpu::Surface,
+pub struct Renderer<'a> {
+    pub surface: wgpu::Surface<'a>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub size: winit::dpi::PhysicalSize<u32>,
@@ -63,19 +66,19 @@ pub struct Renderer {
     pub surface_config: wgpu::SurfaceConfiguration,
 }
 
-impl Renderer {
-    pub async fn new(window: &winit::window::Window) -> Self {
+impl Renderer<'_> {
+    pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
 
         #[cfg(not(target_arch = "wasm32"))]
         let instance = wgpu::Instance::new(
-            wgpu::InstanceDescriptor { backends: wgpu::Backends::VULKAN,
+            &wgpu::InstanceDescriptor { backends: wgpu::Backends::VULKAN,
                                        ..Default::default()});
 
         #[cfg(target_arch = "wasm32")]
         let instance = wgpu::Instance::new(
-            wgpu::InstanceDescriptor { backends: wgpu::Backends::all(),
+            &wgpu::InstanceDescriptor { backends: wgpu::Backends::all(),
                                        ..Default::default()});
 
         let surface = unsafe { instance.create_surface(window).unwrap() };
@@ -94,13 +97,14 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     #[cfg(target_arch = "wasm32")]
-                    features: wgpu::Features::empty(),
+                    required_features: wgpu::Features::empty(),
                     #[cfg(not(target_arch = "wasm32"))]
-                    features: wgpu::Features::empty(),
-                    limits: adapter.limits(),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: adapter.limits(),
                     label: None,
-                },
-                None, // Trace path
+                    memory_hints: wgpu::MemoryHints::Performance,
+                    trace: Trace::Off,
+                }
             )
             .await
             .expect("No device available");
@@ -126,6 +130,7 @@ impl Renderer {
             present_mode,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
+            desired_maximum_frame_latency: 10,
         };
         surface.configure(&device, &surface_config);
 
@@ -432,8 +437,9 @@ impl Renderer {
                 });
         let vert_descriptor = wgpu::VertexState {
             module: &self.layer_shader,
-            entry_point: "vs_main",     // 1.
+            entry_point: Some("vs_main"),     // 1.
             buffers: &[Vertex::desc()], // 2.
+            compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
         };
         let sc_desc = &[Some(wgpu::ColorTargetState {
             format: self.preferred_texture_format,
@@ -458,8 +464,9 @@ impl Renderer {
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &self.layer_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: sc_desc,
+                compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -474,6 +481,7 @@ impl Renderer {
             depth_stencil: None, // 1.
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         };
         self.bind_group_layout = Some(bind_group_layout);
         self.render_pipeline = Some(self.device.create_render_pipeline(&pipe_line_desc));
@@ -519,8 +527,9 @@ impl Renderer {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &self.indexed_vert_shader,
-                    entry_point: "vs_main",
+                    entry_point: Some("vs_main"),
                     buffers: &[Vertex::desc()],
+                    compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
                 },
                 primitive: wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -542,7 +551,7 @@ impl Renderer {
                 multisample: Default::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: &self.indexed_vert_shader,
-                    entry_point: "fs_main",
+                    entry_point: Some("fs_main"),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: self.preferred_texture_format,
                         blend: Some(wgpu::BlendState {
@@ -559,8 +568,10 @@ impl Renderer {
                         }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
+                    compilation_options: PipelineCompilationOptions{constants: &[], zero_initialize_workgroup_memory: false}
                 }),
                 multiview: None,
+                cache: None,
             },
         ));
     }

@@ -86,6 +86,7 @@ pub trait LayerMask {
 }
 
 bitflags! {
+    #[derive(Debug, Copy, Clone)]
     pub struct Mask: u64{
         const D3     = 0b00000001;
         const GUI    = 0b00000010;
@@ -450,14 +451,16 @@ impl PipelineData {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",     // 1.
+                entry_point: Some("vs_main"),     // 1.
                 buffers: &[Vertex::desc()], // 2.
+                compilation_options: wgpu::PipelineCompilationOptions { constants: &[], zero_initialize_workgroup_memory: false },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: sc_desc,
+                compilation_options: wgpu::PipelineCompilationOptions { constants: &[], zero_initialize_workgroup_memory: false },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -472,6 +475,7 @@ impl PipelineData {
             depth_stencil: None, // 1.
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         };
         let pipeline = renderer
             .device
@@ -556,14 +560,16 @@ impl PipelineData {
             layout: Some(&self.pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &self.shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions { constants: &[], zero_initialize_workgroup_memory: false },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &self.shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: color_target,
+                compilation_options: wgpu::PipelineCompilationOptions { constants: &[], zero_initialize_workgroup_memory: false },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -577,6 +583,7 @@ impl PipelineData {
             depth_stencil,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         };
         self.pipeline = renderer
             .device

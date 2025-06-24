@@ -85,8 +85,6 @@ pub fn extract_node<'a>(
                         gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),
                         gltf::image::Format::R8G8B8 => spr.set_data(&image.pixels, 3),
                         gltf::image::Format::R8G8B8A8 => spr.set_data(&image.pixels, 4),
-                        gltf::image::Format::B8G8R8 => spr.set_data(&image.pixels, 3),
-                        gltf::image::Format::B8G8R8A8 => spr.set_data(&image.pixels, 4),
                         _ => {}
                     }
                     Some((spr, image_index))
@@ -212,8 +210,6 @@ pub fn texture_to_sprite (texture: gltf::texture::Texture, images: &[gltf::image
             gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),
             gltf::image::Format::R8G8B8 => spr.set_data(&image.pixels, 3),
             gltf::image::Format::R8G8B8A8 => spr.set_data(&image.pixels, 4),
-            gltf::image::Format::B8G8R8 => spr.set_data(&image.pixels, 3),
-            gltf::image::Format::B8G8R8A8 => spr.set_data(&image.pixels, 4),
             _ => {}
         }
         Some((spr, image_index))
@@ -226,8 +222,6 @@ pub fn image_to_sprite(image: &gltf::image::Data) -> crate::sprite::Sprite{
         gltf::image::Format::R8G8 => spr.set_data(&image.pixels, 2),
         gltf::image::Format::R8G8B8 => spr.set_data(&image.pixels, 3),
         gltf::image::Format::R8G8B8A8 => spr.set_data(&image.pixels, 4),
-        gltf::image::Format::B8G8R8 => spr.set_data(&image.pixels, 3),
-        gltf::image::Format::B8G8R8A8 => spr.set_data(&image.pixels, 4),
         _ => {}
     };
     spr
