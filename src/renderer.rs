@@ -119,7 +119,7 @@ impl Renderer<'_> {
         let present_mode = if(capabilities.present_modes.contains(&wgpu::PresentMode::Immediate)){
             wgpu::PresentMode::Immediate
         } else{
-            wgpu::PresentMode::Fifo
+            wgpu::PresentMode::AutoVsync
         };
 
         let surface_config = wgpu::SurfaceConfiguration {
@@ -130,7 +130,7 @@ impl Renderer<'_> {
             present_mode,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
-            desired_maximum_frame_latency: 10,
+            desired_maximum_frame_latency: 3,
         };
         surface.configure(&device, &surface_config);
 

@@ -241,6 +241,7 @@ async fn start_game<T: OGGame<D> + 'static, D: OGData + 'static>(
     }
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut engine);
+    engine.window.request_redraw();
     //(move |top_event, window_target|;
     //TODO: Setup physics engine on fixed time step
     //physics();

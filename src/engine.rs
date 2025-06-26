@@ -51,7 +51,7 @@ impl<'e, 'l, D: OGData + 'static> ApplicationHandler<Rcode> for OGEngine<'e, D> 
     fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: Rcode) {
         match event {
             Rcode::Fail => event_loop.exit(),
-            Rcode::Ok => todo!(),
+            Rcode::Ok => self.window.request_redraw(),
             Rcode::NoFile => todo!(),
         }    
     }
@@ -226,7 +226,7 @@ impl<'e, 'l, D: OGData + 'static> ApplicationHandler<Rcode> for OGEngine<'e, D> 
                     frame_timer -= 1.0;
                 }
                 update_inputs(self);
-                frame_processed = true;
+                self.window.request_redraw();
             }
             _ => PlatformWindows::handle_window_event(&self.window, &event),
         }
